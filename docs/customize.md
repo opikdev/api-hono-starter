@@ -6,13 +6,43 @@ Replace `api-hono-starter` in `package.json`, `compose.yaml`, `.devcontainer/`, 
 
 ## Add a feature
 
-Use `notes` as the pattern:
+Run the generator, and answer its prompts:
 
-1. Add the table to `src/db/schema.ts`, then run `pnpm db:generate`.
-2. Create `src/features/<name>/store.ts` for queries, scoped by user ID.
-3. Create `src/features/<name>/routes.ts` for the contract, and mount it in `src/app.ts`.
-4. Add `test/integration/<name>.test.ts`, including a test that another user can't reach the data.
-5. Run `pnpm openapi:generate`, then `pnpm verify`.
+```sh
+pnpm gen:feature
+```
+
+Or pass everything on one line, which is what agents and scripts use:
+
+```sh
+pnpm gen:feature projects name:string status:enum:active,archived dueAt:datetime:optional
+```
+
+| Field type | Stored as | Accepts |
+|---|---|---|
+| `string` | `text` | 1–200 characters, trimmed |
+| `text` | `text` | Up to 10,000 characters |
+| `int` | `integer` | A 32-bit integer |
+| `boolean` | `boolean` | `true` or `false` |
+| `datetime` | `timestamptz` | An ISO 8601 UTC timestamp |
+| `enum:a,b` | `text` with a check | One of the listed values |
+
+Add `:optional` to a field to make it nullable. Optional fields are `null` when omitted.
+
+| Flag | Does |
+|---|---|
+| `--dry-run` | Lists the files without writing anything |
+| `--yes` | Skips the confirmation |
+| `--json` | Prints a JSON result |
+| `--skip-verify` | Skips `pnpm verify` |
+| `--keep` | Keeps the files if `pnpm verify` fails, instead of rolling back |
+| `--singular`, `--prefix` | Override the derived singular name and ID prefix |
+
+`pnpm verify` runs the tests against Postgres, so Docker must be running, or `TEST_DATABASE_URL` must be set. The generator checks this before writing anything.
+
+The generator writes the table, store, routes, and tests, and mounts the router. It then creates the migration, updates `openapi.json`, and runs `pnpm verify`. If anything fails, it rolls every change back. Add business logic to the generated files afterward.
+
+To build a feature by hand instead, copy `src/features/notes/` and `test/integration/notes.test.ts`.
 
 ## Remove the notes feature
 

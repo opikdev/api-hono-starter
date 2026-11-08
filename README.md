@@ -8,6 +8,7 @@ A production-ready TypeScript API you can run with one command and customize wit
 ## Features
 
 - **Contract first:** OpenAPI 3.1 is generated from the routes, with docs at `/docs`.
+- **Feature generator:** `pnpm gen:feature` creates a full CRUD feature with tests that pass every gate. Answer prompts, or pass it all on one line.
 - **Typed client:** `AppType` gives TypeScript callers every route and response type through Hono RPC. See [Call the API from TypeScript](docs/client.md).
 - **Auth:** registration, login, and revocable session tokens, with per-user data access.
 - **Reliable by default:** rate limits, idempotency keys, optimistic concurrency, and cursor pagination.
@@ -58,10 +59,18 @@ pnpm dev
 | --------------------------------------------------------- | ----------------------- |
 | Run lint, types, migrations check, tests, and repo checks | `pnpm verify`           |
 | Test the real image end to end                            | `pnpm test:e2e`         |
+| Generate a CRUD feature, with prompts | `pnpm gen:feature` |
+| Generate a CRUD feature in one line | `pnpm gen:feature projects name:string dueAt:datetime:optional` |
 | Create a migration after editing `src/db/schema.ts`       | `pnpm db:generate`      |
 | Update `openapi.json` after changing a route              | `pnpm openapi:generate` |
 
-Tests start their own Postgres, so Docker must be running. To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). Before you deploy, read [Operate the API](docs/operations.md).
+Tests start their own Postgres, so Docker must be running. Without Docker, point them at a Postgres 18 server instead:
+
+```sh
+TEST_DATABASE_URL=postgres://<SUPERUSER>@localhost:5432/postgres pnpm verify
+```
+
+Each run creates a temporary database and drops it afterward, so existing data is never touched. The user needs permission to create databases and roles. To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). Before you deploy, read [Operate the API](docs/operations.md).
 
 ## Project structure
 
