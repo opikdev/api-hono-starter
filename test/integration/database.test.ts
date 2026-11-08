@@ -135,16 +135,16 @@ describe('migrations', () => {
 
   it('gives every table an id and timestamps', async () => {
     const { rows } = await owner.execute<{ table_name: string; column_name: string }>(
-      sql`select table_name, column_name from information_schema.columns where table_schema = 'public' and column_name in ('id', 'created_at', 'updated_at')`,
+      sql`select c.table_name, c.column_name from information_schema.columns c join information_schema.tables t using (table_schema, table_name) where c.table_schema = 'public' and t.table_type = 'BASE TABLE' and c.column_name in ('id', 'created_at', 'updated_at')`,
     );
-    const counts = Object.groupBy(rows, (row) => row.table_name);
-    expect(Object.keys(counts).sort()).toEqual([
-      'idempotency_keys',
-      'notes',
-      'rate_limits',
-      'sessions',
-      'users',
-    ]);
-    for (const columns of Object.values(counts)) expect(columns).toHaveLength(3);
+    const { rows: tables } = await owner.execute<{ table_name: string }>(
+      sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
+    );
+    const columns = Object.groupBy(rows, (row) => row.table_name);
+    const names = tables.map((table) => table.table_name);
+    expect(names).toEqual(
+      expect.arrayContaining(['idempotency_keys', 'notes', 'rate_limits', 'sessions', 'users']),
+    );
+    for (const name of names) expect(columns[name], name).toHaveLength(3);
   });
 });
