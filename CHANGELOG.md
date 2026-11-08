@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- Projects created with `pik new` are formatted after renaming, so a longer name can't fail `pnpm verify`.
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed

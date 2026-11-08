@@ -38,6 +38,7 @@ exclude:
   - .github/workflows/baseline-check.yml
 setup:
   - pnpm install
+  - pnpm exec biome format --write .
 next:
   - docker compose up --build --wait api
 check:
