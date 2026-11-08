@@ -2,7 +2,7 @@
 
 ## Rename the project
 
-Replace `api-hono-starter` in `package.json`, `compose.yaml`, `.devcontainer/`, and `src/instrumentation.ts`. Replace the database names in `compose.yaml`, `.env.example`, and `docker/postgres/init.sql`.
+Projects created with `pik new` are already renamed. To rename a clone by hand, replace `api-hono-starter` in the files listed under `replace` in `pik.yaml`. Then replace the database names in `compose.yaml`, `.env.example`, and `docker/postgres/init.sql`.
 
 ## Add a feature
 
