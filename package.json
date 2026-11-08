@@ -16,6 +16,7 @@
     "db:check": "scripts/check-migrations.sh",
     "db:migrate": "node --env-file-if-exists=.env src/db/migrate.ts",
     "db:seed": "node --env-file-if-exists=.env src/db/seed.ts",
+    "gen:feature": "node scripts/gen-feature.ts",
     "format": "biome format --write .",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
@@ -23,7 +24,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "openapi:generate": "node scripts/generate-openapi.ts",
-    "verify": "pnpm lint && pnpm typecheck && pnpm db:check && pnpm test:coverage && .agents/check.sh && .github/scripts/check-repo-standards.sh"
+    "verify": "pnpm lint && pnpm typecheck && pnpm db:check && pnpm test:coverage && .agents/check.sh && .github/scripts/check-repo-standards.sh",
+    "test:generator": "vitest run --config vitest.generator.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
+    "@clack/prompts": "^1.8.1",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
