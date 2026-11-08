@@ -4,6 +4,8 @@ import { notes } from '../../db/schema.ts';
 
 type Writer = Pick<Db, 'insert'>;
 
+export type NoteRow = typeof notes.$inferSelect;
+
 export interface NoteInput {
   title: string;
   body: string;

@@ -3,6 +3,21 @@ import type { Db } from '../../db/client.ts';
 import { withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
+import {
+  bearerSecurity,
+  etag,
+  hasNoNul,
+  idempotencyHeaders,
+  idParams,
+  ifMatchHeaders,
+  jsonContent,
+  listQuery,
+  nulMessage,
+  pageSchema,
+  parseCursor,
+  parseIfMatch,
+  toPage,
+} from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
 import type { RequireAuth } from '../auth/middleware.ts';
 import {
@@ -11,13 +26,9 @@ import {
   insertNote,
   listNotes,
   type NotePatch,
+  type NoteRow,
   updateNote,
 } from './store.ts';
-
-const maxVersion = 2_147_483_647;
-
-const hasNoNul = (value: string) => !value.includes('\0');
-const nulMessage = 'Must not contain NUL characters';
 
 const title = z
   .string()
@@ -47,55 +58,12 @@ const createNoteSchema = z.strictObject({ title, body: body.default('') }).opena
 
 const updateNoteSchema = z
   .strictObject({ title: title.optional(), body: body.optional() })
-  .refine((patch) => patch.title !== undefined || patch.body !== undefined, {
-    message: 'Provide title, body, or both',
-  })
+  .refine((patch) => Object.keys(patch).length > 0, { message: 'Provide title, body, or both' })
   .openapi('UpdateNote');
 
-const noteListSchema = z
-  .object({
-    data: z.array(noteSchema),
-    meta: z.object({
-      limit: z.number().int().openapi({ example: 20 }),
-      nextCursor: z.string().nullable().openapi({ example: null }),
-    }),
-  })
-  .openapi('NoteList');
+const noteListSchema = pageSchema(noteSchema, 'NoteList');
 
-const noteParams = z.object({
-  id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
-});
-
-const idempotencyHeaders = z.object({
-  'idempotency-key': z
-    .string()
-    .min(1)
-    .max(255)
-    .optional()
-    .openapi({ description: 'Replays within 24 hours return the original response.' }),
-});
-
-const ifMatchHeaders = z.object({
-  'if-match': z.string().optional().openapi({
-    description: 'The `ETag` from your last read. Required.',
-    example: '"1"',
-  }),
-});
-
-const security = [{ bearerAuth: [] }];
-
-const jsonContent = <T extends z.ZodType>(schema: T) => ({
-  content: { 'application/json': { schema } },
-});
-
-function presentNote(note: {
-  id: string;
-  title: string;
-  body: string;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function presentNote(note: NoteRow) {
   return {
     id: toPublicId('note', note.id),
     title: note.title,
@@ -104,24 +72,6 @@ function presentNote(note: {
     createdAt: note.createdAt.toISOString(),
     updatedAt: note.updatedAt.toISOString(),
   };
-}
-
-function etag(version: number): string {
-  return `"${version}"`;
-}
-
-function parseIfMatch(header: string | undefined): number {
-  if (!header) {
-    throw new ProblemError(
-      'precondition-required',
-      'Send the If-Match header with the ETag from your last read of this note.',
-    );
-  }
-  const version = Number(/^"(\d+)"$/.exec(header)?.[1]);
-  if (!Number.isInteger(version) || version > maxVersion) {
-    throw new ProblemError('version-mismatch', `If-Match ${header} is not a current ETag.`);
-  }
-  return version;
 }
 
 function notFound(publicId: string): ProblemError {
@@ -142,7 +92,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'createNote',
         summary: 'Create a note',
         tags: ['Notes'],
-        security,
+        security: bearerSecurity,
         middleware: [requireAuth],
         request: {
           headers: idempotencyHeaders,
@@ -181,17 +131,9 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'listNotes',
         summary: 'List your notes, newest first',
         tags: ['Notes'],
-        security,
+        security: bearerSecurity,
         middleware: [requireAuth],
-        request: {
-          query: z.object({
-            limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ example: 20 }),
-            cursor: z
-              .string()
-              .optional()
-              .openapi({ description: '`meta.nextCursor` from a prior page.' }),
-          }),
-        },
+        request: { query: listQuery },
         responses: {
           200: { description: 'A page of notes', ...jsonContent(noteListSchema) },
           ...problemResponses('validation-failed', 'unauthorized', 'rate-limited'),
@@ -199,17 +141,9 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
       }),
       async (c) => {
         const { limit, cursor } = c.req.valid('query');
-        const after = cursor ? fromPublicId('note', cursor) : null;
-        if (cursor && !after) {
-          throw new ProblemError('validation-failed', `Cursor ${cursor} is not valid.`, {
-            errors: [{ field: 'cursor', detail: 'Use meta.nextCursor from a previous response' }],
-          });
-        }
-
+        const after = parseCursor('note', cursor);
         const rows = await listNotes(db, c.get('user').id, limit + 1, after);
-        const page = rows.slice(0, limit).map(presentNote);
-        const nextCursor = rows.length > limit ? (page.at(-1)?.id ?? null) : null;
-        return c.json({ data: page, meta: { limit, nextCursor } }, 200);
+        return c.json(toPage(rows, limit, presentNote), 200);
       },
     )
     .openapi(
@@ -219,9 +153,9 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'getNote',
         summary: 'Get a note',
         tags: ['Notes'],
-        security,
+        security: bearerSecurity,
         middleware: [requireAuth],
-        request: { params: noteParams },
+        request: { params: idParams },
         responses: {
           200: { description: 'The note', ...jsonContent(noteSchema) },
           ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
@@ -244,10 +178,10 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'updateNote',
         summary: 'Update a note',
         tags: ['Notes'],
-        security,
+        security: bearerSecurity,
         middleware: [requireAuth],
         request: {
-          params: noteParams,
+          params: idParams,
           headers: ifMatchHeaders,
           body: { ...jsonContent(updateNoteSchema), required: true },
         },
@@ -297,9 +231,9 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'deleteNote',
         summary: 'Delete a note',
         tags: ['Notes'],
-        security,
+        security: bearerSecurity,
         middleware: [requireAuth],
-        request: { params: noteParams },
+        request: { params: idParams },
         responses: {
           204: { description: 'Note deleted' },
           ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
