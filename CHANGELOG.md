@@ -4,6 +4,12 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- The dev container installs `jq` and sets `TEST_DATABASE_URL`, so `.agents/check.sh` and `pnpm verify` work inside it.
+- Projects created with `pik new` and an owner get README clone and `cd` commands with their own name.
+- The SBOM job retries once after a GitHub download error.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added
