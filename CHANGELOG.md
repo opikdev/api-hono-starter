@@ -4,6 +4,12 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-08
+
+### Fixed
+
+- Release images now include arm64, so Apple Silicon and ARM servers run them natively.
+
 ## [0.1.0] - 2026-11-08
 
 ### Added
