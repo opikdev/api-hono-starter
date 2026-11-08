@@ -1,0 +1,9 @@
+{
+  "name": "api-hono-starter",
+  "dockerComposeFile": ["../compose.yaml", "compose.yaml"],
+  "service": "dev",
+  "runServices": ["db", "migrate"],
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm install --global pnpm@12.18.0 && pnpm install && (test -f .env || cp .env.example .env)"
+}
