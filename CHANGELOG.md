@@ -4,6 +4,12 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
+### Added
+
+- `pik.yaml`, so `pik new api-hono-starter` can create projects from this starter.
+
 ## [0.1.1] - 2026-11-08
 
 ### Fixed
