@@ -1,6 +1,6 @@
 # Agent guide
 
-A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with auth, rate limits, and Problem Details errors. `notes` is the sample feature to copy or replace.
+A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with auth, rate limits, and Problem Details errors. `notes` is the sample feature, and `pnpm gen:feature` creates new ones in the same shape.
 
 | Path                                         | Purpose                                                      |
 | -------------------------------------------- | ------------------------------------------------------------ |

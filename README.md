@@ -76,7 +76,7 @@ Each run creates a temporary database and drops it afterward, so existing data i
 
 | Path            | Purpose                                                                        |
 | --------------- | ------------------------------------------------------------------------------ |
-| `src/features/` | Routes and queries for each feature. `notes` is the sample to copy             |
+| `src/features/` | Routes and queries for each feature. `notes` is the sample feature             |
 | `src/platform/` | Errors, rate limits, idempotency, and logging                                  |
 | `src/db/`       | Schema, connections, migration runner, and seed data                           |
 | `migrations/`   | Generated SQL migrations, which are append-only                                |
