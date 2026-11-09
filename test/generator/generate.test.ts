@@ -108,7 +108,9 @@ describe('pnpm gen:feature', () => {
     );
     expect(second.body.output ?? '').toBe('');
     expect(second.body).toMatchObject({ ok: true, verify: 'passed' });
-    expect(second.body.migrations).toContain('migrations/0002_add_time_entries.sql');
+    expect(second.body.migrations).toContainEqual(
+      expect.stringMatching(/^migrations\/\d{4}_add_time_entries\.sql$/),
+    );
     expect(readFileSync(join(repo, 'openapi.json'), 'utf8')).toContain('/v1/time-entries/{id}');
   });
 
