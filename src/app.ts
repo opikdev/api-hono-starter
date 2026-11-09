@@ -27,7 +27,7 @@ interface AppDependencies {
 
 export function createApp({ config, db, logger }: AppDependencies) {
   const app = createRouter();
-  const trustProxy = config.TRUST_PROXY;
+  const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
   app.use(httpInstrumentationMiddleware());
   app.use(requestId());
@@ -63,14 +63,14 @@ export function createApp({ config, db, logger }: AppDependencies) {
   );
   app.use(
     '/v1/*',
-    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustProxy }),
+    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustedProxyHops }),
   );
 
   const authRateLimit = rateLimit({
     db,
     name: 'auth',
     limit: config.AUTH_RATE_LIMIT_PER_MINUTE,
-    trustProxy,
+    trustedProxyHops,
   });
   const requireAuth = createRequireAuth(db);
 

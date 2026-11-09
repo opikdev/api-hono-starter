@@ -4,7 +4,7 @@ import { createDb, createPool } from '../../src/db/client.ts';
 import { idempotencyKeys, notes, rateLimits, sessions, users } from '../../src/db/schema.ts';
 import { deleteExpiredRows } from '../../src/platform/cleanup.ts';
 import { fromPublicId } from '../../src/platform/public-id.ts';
-import { db, signUp, testApp } from '../helpers.ts';
+import { db, signUp, testApp, uniqueIp } from '../helpers.ts';
 
 const ownerPool = createPool(inject('ownerDatabaseUrl'), 5000);
 const owner = createDb(ownerPool);
@@ -60,7 +60,7 @@ describe('constraints', () => {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'cascade-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: JSON.stringify({ title: 'Mine' }),
     });

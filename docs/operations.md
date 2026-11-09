@@ -12,13 +12,18 @@ Set these on the API process. `.env.example` lists every option with a safe defa
 | `DATABASE_STATEMENT_TIMEOUT_MS` | number  | `5000`   | Cancels slow queries                                                |
 | `DATABASE_POOL_MAX`             | number  | `10`     | Most database connections each API process opens. At least 1        |
 | `CORS_ORIGINS`                  | list    | Empty    | Comma-separated browser origins. Empty disables CORS                |
-| `TRUST_PROXY`                   | boolean | `false`  | Set to `true` only behind a proxy that appends to `X-Forwarded-For` |
+| `TRUST_PROXY_HOPS`              | number  | `0`      | How many proxies in front of the API append to `X-Forwarded-For`    |
 | `SESSION_TTL_HOURS`             | number  | `168`    | Session lifetime                                                    |
 | `RATE_LIMIT_PER_MINUTE`         | number  | `300`    | Per client, across `/v1`                                            |
 | `AUTH_RATE_LIMIT_PER_MINUTE`    | number  | `10`     | Per client, on registration and login                               |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`   | URL     | Empty    | Turns on trace and error export                                     |
 
-Set `TRUST_PROXY` correctly, or every client behind a load balancer shares one rate limit.
+Set `TRUST_PROXY_HOPS` to the number of proxies you run, or every client behind a load balancer shares one rate limit:
+
+- `0` ignores `X-Forwarded-For` and uses the connection's address.
+- `1` or more takes that many addresses from the right of `X-Forwarded-For`, so `1` means one load balancer. With fewer addresses than hops, it takes the leftmost. If that entry isn't an IP address, it uses the connection's address.
+
+Never set it higher than the number of proxies you run, because clients can write any addresses they like to the left of yours.
 
 ## Set up production roles
 
