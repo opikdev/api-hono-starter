@@ -10,6 +10,19 @@ describe('loadConfig', () => {
     expect(config.TRUST_PROXY).toBe(false);
     expect(config.CORS_ORIGINS).toEqual([]);
     expect(config.AUTH_RATE_LIMIT_PER_MINUTE).toBe(10);
+    expect(config.DATABASE_POOL_MAX).toBe(10);
+  });
+
+  it('parses the pool size', () => {
+    expect(
+      loadConfig({ DATABASE_URL: databaseUrl, DATABASE_POOL_MAX: '25' }).DATABASE_POOL_MAX,
+    ).toBe(25);
+  });
+
+  it.each(['0', '-1', '2.5', 'many'])('rejects a pool size of %s', (value) => {
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, DATABASE_POOL_MAX: value })).toThrow(
+      /DATABASE_POOL_MAX/,
+    );
   });
 
   it('parses comma-separated origins', () => {

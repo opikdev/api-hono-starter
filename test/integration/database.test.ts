@@ -73,6 +73,17 @@ describe('constraints', () => {
   });
 });
 
+describe('connection pool', () => {
+  it('opens no more connections than its max', async () => {
+    const pool = createPool(inject('databaseUrl'), 5000, 1);
+    const queries = [pool.query('select pg_sleep(0.05)'), pool.query('select 1')];
+    expect(pool.waitingCount).toBe(1);
+    await Promise.all(queries);
+    expect(pool.totalCount).toBe(1);
+    await pool.end();
+  });
+});
+
 describe('expired row cleanup', () => {
   it('removes expired rows and keeps live ones', async () => {
     const expired = await signUp(app);

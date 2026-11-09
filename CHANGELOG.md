@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- `DATABASE_POOL_MAX` sets the API's database pool size. It defaults to 10, as before.
+
 ## [0.2.3] - 2026-11-09
 
 ### Fixed

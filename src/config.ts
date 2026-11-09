@@ -11,6 +11,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
   DATABASE_URL: z.url(),
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
   CORS_ORIGINS: z
     .string()
     .default('')
