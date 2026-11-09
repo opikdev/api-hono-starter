@@ -11,9 +11,9 @@ import { createRequireAuth } from './features/auth/middleware.ts';
 import { createAuthRouter } from './features/auth/routes.ts';
 import { createHealthRouter } from './features/health/routes.ts';
 import { createNotesRouter } from './features/notes/routes.ts';
-import { createErrorHandler } from './platform/error-handler.ts';
+import { createErrorHandler, respond } from './platform/error-handler.ts';
 import type { Logger } from './platform/logger.ts';
-import { ProblemError, type ProblemResponses, problemResponse } from './platform/problem.ts';
+import { ProblemError, type ProblemResponses } from './platform/problem.ts';
 import { rateLimit } from './platform/rate-limit.ts';
 import { createRouter } from './platform/router.ts';
 
@@ -98,10 +98,7 @@ export function createApp({ config, db, logger }: AppDependencies) {
   app.get('/docs', swaggerUI({ url: '/openapi.json' }));
 
   app.notFound((c) =>
-    problemResponse(
-      new ProblemError('not-found', `No route matches ${c.req.method} ${c.req.path}.`),
-      c.req.path,
-    ),
+    respond(c, new ProblemError('not-found', `No route matches ${c.req.method} ${c.req.path}.`)),
   );
   app.onError(createErrorHandler(logger));
 

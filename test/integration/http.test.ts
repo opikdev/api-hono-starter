@@ -79,6 +79,30 @@ describe('security headers', () => {
     const response = await call(app, 'GET', '/healthz');
     expect(response.headers.get('x-request-id')).toBeTruthy();
   });
+
+  it.each([
+    ['an unknown route', 'GET', '/v1/nope', 404],
+    ['a thrown problem', 'GET', '/v1/notes', 401],
+    ['malformed JSON', 'POST', '/v1/users', 400],
+  ] as const)('sets them on %s', async (_label, method, path, status) => {
+    const response = await call(app, method, path, method === 'POST' ? { rawBody: '{ nope' } : {});
+    expect(response.status).toBe(status);
+    expect(response.headers.get('x-request-id')).toBeTruthy();
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('returns the request id quoted in a 500', async () => {
+    const { asLogger } = spyLogger();
+    const pool = createPool('postgres://nobody:wrong-secret@127.0.0.1:1/none', 100);
+    pool.on('error', () => {});
+    const broken = createApp({ config: testConfig(), db: createDb(pool), logger: asLogger });
+    const response = await call(broken, 'GET', '/v1/notes');
+    const problem = await expectProblem(response, 500, 'internal-error');
+    const requestId = response.headers.get('x-request-id');
+    expect(requestId).toBeTruthy();
+    expect(problem.detail).toContain(`quote request ${requestId} `);
+    await pool.end();
+  });
 });
 
 describe('CORS', () => {
@@ -87,6 +111,12 @@ describe('CORS', () => {
 
   it('allows a listed origin', async () => {
     const response = await call(withCors, 'GET', '/v1/notes', { headers: { Origin: allowed } });
+    expect(response.headers.get('access-control-allow-origin')).toBe(allowed);
+  });
+
+  it('allows a listed origin to read an error', async () => {
+    const response = await call(withCors, 'GET', '/v1/notes', { headers: { Origin: allowed } });
+    expect(response.status).toBe(401);
     expect(response.headers.get('access-control-allow-origin')).toBe(allowed);
   });
 
