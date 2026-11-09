@@ -25,8 +25,8 @@ import {
   findNote,
   insertNote,
   listNotes,
-  type NotePatch,
   type NoteRow,
+  type NoteValues,
   updateNote,
 } from './store.ts';
 
@@ -210,7 +210,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         const noteId = fromPublicId('note', id);
         if (!noteId) throw notFound(id);
 
-        const patch: NotePatch = {};
+        const patch: Partial<NoteValues> = {};
         const { title: newTitle, body: newBody } = c.req.valid('json');
         if (newTitle !== undefined) patch.title = newTitle;
         if (newBody !== undefined) patch.body = newBody;

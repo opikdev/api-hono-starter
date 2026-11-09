@@ -6,17 +6,15 @@ type Writer = Pick<Db, 'insert'>;
 
 export type NoteRow = typeof notes.$inferSelect;
 
-export interface NoteInput {
-  title: string;
-  body: string;
-}
+export type NoteValues = Omit<
+  typeof notes.$inferInsert,
+  'id' | 'userId' | 'version' | 'createdAt' | 'updatedAt'
+>;
 
-export type NotePatch = Partial<NoteInput>;
-
-export async function insertNote(db: Writer, userId: string, input: NoteInput) {
+export async function insertNote(db: Writer, userId: string, values: NoteValues) {
   const [note] = await db
     .insert(notes)
-    .values({ userId, ...input })
+    .values({ userId, ...values })
     .returning();
   if (!note) throw new Error(`Note insert returned no row for user: ${userId}`);
   return note;
@@ -44,7 +42,7 @@ export async function updateNote(
   userId: string,
   noteId: string,
   version: number,
-  patch: NotePatch,
+  patch: Partial<NoteValues>,
 ) {
   const [note] = await db
     .update(notes)
