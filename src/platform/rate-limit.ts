@@ -32,12 +32,12 @@ interface RateLimitOptions {
   db: Db;
   name: string;
   limit: number;
-  trustProxy: boolean;
+  trustedProxyHops: number;
 }
 
-export function rateLimit({ db, name, limit, trustProxy }: RateLimitOptions) {
+export function rateLimit({ db, name, limit, trustedProxyHops }: RateLimitOptions) {
   return createMiddleware<AppEnv>(async (c, next) => {
-    const { count, resetAt } = await hit(db, `${name}:${clientIp(c, trustProxy)}`);
+    const { count, resetAt } = await hit(db, `${name}:${clientIp(c, trustedProxyHops)}`);
     const secondsUntilReset = Math.max(1, Math.ceil((resetAt.getTime() - Date.now()) / 1000));
     const headers = {
       'RateLimit-Limit': String(limit),

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
+import type { Context } from 'hono';
+import { routePath } from 'hono/route';
 import type { Db } from '../db/client.ts';
 import { idempotencyKeys } from '../db/schema.ts';
 import { ProblemError } from './problem.ts';
@@ -8,6 +10,7 @@ type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 interface IdempotentRequest {
   userId: string;
+  endpoint: string;
   key: string | undefined;
   payload: unknown;
 }
@@ -19,13 +22,18 @@ export interface IdempotentResult<T> {
 
 const retention = sql`now() + interval '24 hours'`;
 
+/** Scopes keys to the route, such as `POST /v1/notes`, so one key can't replay another endpoint. */
+export function endpointOf(c: Context): string {
+  return `${c.req.method} ${routePath(c)}`;
+}
+
 function hashPayload(payload: unknown): string {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
 export function withIdempotency<T>(
   db: Db,
-  { userId, key, payload }: IdempotentRequest,
+  { userId, endpoint, key, payload }: IdempotentRequest,
   create: (tx: Transaction) => Promise<T>,
 ): Promise<IdempotentResult<T>> {
   return db.transaction(async (tx) => {
@@ -36,19 +44,28 @@ export function withIdempotency<T>(
       .insert(idempotencyKeys)
       .values({
         userId,
+        endpoint,
         key,
         requestHash,
         responseBody: {},
         expiresAt: retention,
       })
-      .onConflictDoNothing({ target: [idempotencyKeys.userId, idempotencyKeys.key] })
+      .onConflictDoNothing({
+        target: [idempotencyKeys.userId, idempotencyKeys.endpoint, idempotencyKeys.key],
+      })
       .returning({ id: idempotencyKeys.id });
 
     if (!claimed) {
       const [original] = await tx
         .select()
         .from(idempotencyKeys)
-        .where(and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, key)));
+        .where(
+          and(
+            eq(idempotencyKeys.userId, userId),
+            eq(idempotencyKeys.endpoint, endpoint),
+            eq(idempotencyKeys.key, key),
+          ),
+        );
       if (!original) throw new Error(`Idempotency key vanished during replay: ${key}`);
       if (original.requestHash !== requestHash) {
         throw new ProblemError(

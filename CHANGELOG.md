@@ -4,6 +4,28 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- `DATABASE_POOL_MAX` sets the API's database pool size. It defaults to 10, as before.
+- Migration `0001` indexes `sessions.user_id`, so deleting a user doesn't scan every session.
+- `urn:problem:forbidden` (403) and `urn:problem:timeout` (504), for Hono middleware such as CSRF protection and `hono/timeout`.
+
+### Changed
+
+- **Breaking:** `TRUST_PROXY_HOPS` replaces `TRUST_PROXY`. Set it to the number of proxies that append to `X-Forwarded-For`, and the API takes the client address that many entries from the right. It defaults to 0, which ignores the header. The API refuses to start while `TRUST_PROXY` is set, so replace `TRUST_PROXY=true` with `TRUST_PROXY_HOPS=1`.
+
+### Fixed
+
+- An `HTTPException` from Hono or its middleware becomes the problem type for its status, such as 401 `unauthorized`. Before, every 400 said the JSON was malformed, and any other status became a logged 500.
+- CORS exposes `ETag`, `Location`, `X-Request-Id`, `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Idempotency-Replayed`, so browser clients can read them.
+- Idempotency keys are scoped to the endpoint as well as the user, so reusing a key on another endpoint no longer replays that endpoint's response. Migration `0002` adds `idempotency_keys.endpoint`. Keys stored before it stop replaying and expire within 24 hours. Generated features pass the endpoint too.
+- Shutdown on `SIGTERM` and `SIGINT` gives requests in flight 5 seconds, then closes their connections, closes the pool, and waits for traces to flush before exiting. Before, a slow request could stall it, the process could exit before traces were sent, and `SIGINT` didn't flush them.
+- The release workflow runs the CI checks on the tagged commit and publishes the image only if they pass.
+- `pnpm verify` checks that committed migrations are unchanged locally too, against the merge base with `origin/main`, or `main`. Before, only CI checked. With neither ref, it skips the check and says so.
+- The migration runner sets `lock_timeout` to 5 seconds and `statement_timeout` to 5 minutes, so a migration can't queue behind a lock and block traffic.
+- `docs/operations.md` explains how to build an index with `CREATE INDEX CONCURRENTLY`. It used to say to put it in a migration, which fails because the runner uses a transaction.
+- `docs/customize.md` says to start every resource with `pnpm gen:feature`, as `AGENTS.md` does, instead of copying `notes` by hand. Its steps to remove idempotency now cover the generator template, CORS headers, and problem type.
+
 ## [0.2.3] - 2026-11-09
 
 ### Fixed

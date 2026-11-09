@@ -1,5 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
+import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const port = process.env.E2E_PORT ?? '3100';
@@ -20,6 +22,13 @@ function compose(...args: string[]): string {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+const run = promisify(execFile);
+
+/** Doesn't block, so the collector in this process can receive the traces flushed on shutdown. */
+async function composeAsync(...args: string[]) {
+  await run('docker', ['compose', ...args], { env: composeEnv });
 }
 
 let traceBytes = '';
@@ -178,7 +187,7 @@ describe('the running stack', () => {
   });
 
   it('keeps data across a restart', async () => {
-    compose('restart', 'api');
+    await composeAsync('restart', 'api');
     await waitFor(async () => {
       try {
         return (await fetch(`${baseUrl}/readyz`)).ok;
@@ -193,8 +202,11 @@ describe('the running stack', () => {
     expect(login.status).toBe(201);
   });
 
-  it('shuts down cleanly on SIGTERM', () => {
-    compose('stop', 'api');
+  it('flushes traces and shuts down cleanly on SIGTERM', async () => {
+    const marker = randomUUID();
+    expect((await fetch(`${baseUrl}/healthz?marker=${marker}`)).status).toBe(200);
+    await composeAsync('stop', 'api');
+    expect(traceBytes).toContain(marker);
     const state = compose('ps', '--all', 'api', '--format', '{{.ExitCode}}').trim();
     expect(state).toBe('0');
   });

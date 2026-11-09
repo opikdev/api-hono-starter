@@ -1,6 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
-import { withIdempotency } from '../../platform/idempotency.ts';
+import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -25,8 +25,8 @@ import {
   findNote,
   insertNote,
   listNotes,
-  type NotePatch,
   type NoteRow,
+  type NoteValues,
   updateNote,
 } from './store.ts';
 
@@ -114,7 +114,12 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         const userId = c.get('user').id;
         const { body: note, replayed } = await withIdempotency(
           db,
-          { userId, key: c.req.valid('header')['idempotency-key'], payload: input },
+          {
+            userId,
+            endpoint: endpointOf(c),
+            key: c.req.valid('header')['idempotency-key'],
+            payload: input,
+          },
           async (tx) => presentNote(await insertNote(tx, userId, input)),
         );
 
@@ -205,7 +210,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         const noteId = fromPublicId('note', id);
         if (!noteId) throw notFound(id);
 
-        const patch: NotePatch = {};
+        const patch: Partial<NoteValues> = {};
         const { title: newTitle, body: newBody } = c.req.valid('json');
         if (newTitle !== undefined) patch.title = newTitle;
         if (newBody !== undefined) patch.body = newBody;

@@ -42,7 +42,7 @@ Add `:optional` to a field to make it nullable. Optional fields are `null` when 
 
 The generator writes the table, store, routes, and tests, and mounts the router. It then creates the migration, updates `openapi.json`, and runs `pnpm verify`. If anything fails, it rolls every change back. Add business logic to the generated files afterward.
 
-To build a feature by hand instead, copy `src/features/notes/` and `test/integration/notes.test.ts`.
+Start every new resource this way, even one that needs custom logic, so it gets the same contract, tests, and migration. `src/features/notes/` has the same layout, so read it for examples of business logic.
 
 ## Remove the notes feature
 
@@ -53,7 +53,12 @@ To build a feature by hand instead, copy `src/features/notes/` and `test/integra
 
 ## Remove idempotency
 
-Delete `src/platform/idempotency.ts`, call `insertNote` directly in `src/features/notes/routes.ts`, and remove `idempotencyKeys` from `src/db/schema.ts` and `src/platform/cleanup.ts`.
+1. Delete `src/platform/idempotency.ts` and `test/integration/idempotency.test.ts`.
+2. In `src/features/notes/routes.ts` and each generated feature's `routes.ts`, call the insert function directly instead of through `withIdempotency`. Remove `idempotencyHeaders`, `'idempotency-key-reused'`, and the `Idempotency-Replayed` header.
+3. Make the same change in the generator template, `renderRoutes` in `scripts/gen-feature/render.ts`, and delete the replay test from `renderTest` in the same file and from each generated feature's tests.
+4. Remove `idempotencyHeaders` from `src/platform/resource.ts`, `Idempotency-Replayed` from the CORS headers in `src/app.ts` and `test/integration/http.test.ts`, and `idempotency-key-reused` from `src/platform/problem.ts` and `docs/errors.md`.
+5. Remove `idempotencyKeys` from `src/db/schema.ts`, `src/platform/cleanup.ts`, and `test/integration/database.test.ts`, then run `pnpm db:generate`.
+6. Run `pnpm openapi:generate`, then `pnpm verify` and `pnpm test:generator`.
 
 ## Remove tracing
 

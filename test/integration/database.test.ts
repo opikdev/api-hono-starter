@@ -4,7 +4,7 @@ import { createDb, createPool } from '../../src/db/client.ts';
 import { idempotencyKeys, notes, rateLimits, sessions, users } from '../../src/db/schema.ts';
 import { deleteExpiredRows } from '../../src/platform/cleanup.ts';
 import { fromPublicId } from '../../src/platform/public-id.ts';
-import { db, signUp, testApp } from '../helpers.ts';
+import { db, signUp, testApp, uniqueIp } from '../helpers.ts';
 
 const ownerPool = createPool(inject('ownerDatabaseUrl'), 5000);
 const owner = createDb(ownerPool);
@@ -60,7 +60,7 @@ describe('constraints', () => {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'cascade-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: JSON.stringify({ title: 'Mine' }),
     });
@@ -70,6 +70,17 @@ describe('constraints', () => {
     const liveSessions = await db.select().from(sessions).where(sql`${sessions.userId} = ${id}`);
     expect(remaining).toEqual([]);
     expect(liveSessions).toEqual([]);
+  });
+});
+
+describe('connection pool', () => {
+  it('opens no more connections than its max', async () => {
+    const pool = createPool(inject('databaseUrl'), 5000, 1);
+    const queries = [pool.query('select pg_sleep(0.05)'), pool.query('select 1')];
+    expect(pool.waitingCount).toBe(1);
+    await Promise.all(queries);
+    expect(pool.totalCount).toBe(1);
+    await pool.end();
   });
 });
 
@@ -89,6 +100,7 @@ describe('expired row cleanup', () => {
     await db.insert(idempotencyKeys).values([
       {
         userId: expiredId,
+        endpoint: 'POST /v1/notes',
         key: 'old',
         requestHash: 'x',
 
@@ -97,6 +109,7 @@ describe('expired row cleanup', () => {
       },
       {
         userId: liveId,
+        endpoint: 'POST /v1/notes',
         key: 'new',
         requestHash: 'x',
 
@@ -131,6 +144,13 @@ describe('migrations', () => {
     const names = rows.map((row) => row.conname);
     expect(names.length).toBeGreaterThan(10);
     expect(names.filter((name) => !/^(pk|uq|fk|chk)_/.test(name))).toEqual([]);
+  });
+
+  it('indexes every foreign key column', async () => {
+    const { rows } = await owner.execute<{ conname: string }>(
+      sql`select c.conname from pg_constraint c where c.connamespace = 'public'::regnamespace and c.contype = 'f' and not exists (select 1 from pg_index i where i.indrelid = c.conrelid and i.indkey[0] = c.conkey[1])`,
+    );
+    expect(rows.map((row) => row.conname)).toEqual([]);
   });
 
   it('gives every table an id and timestamps', async () => {

@@ -1,6 +1,7 @@
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { onShutdown } from './platform/shutdown.ts';
 
 if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
   const sdk = new NodeSDK({
@@ -9,7 +10,5 @@ if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
     instrumentations: [new PgInstrumentation()],
   });
   sdk.start();
-  process.once('SIGTERM', () => {
-    sdk.shutdown().catch((err) => console.error('OpenTelemetry shutdown failed', err));
-  });
+  onShutdown(() => sdk.shutdown());
 }

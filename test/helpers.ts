@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, inject } from 'vitest';
 import { createApp } from '../src/app.ts';
 import { type Config, loadConfig } from '../src/config.ts';
@@ -19,7 +19,7 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
     DATABASE_URL: inject('databaseUrl'),
-    TRUST_PROXY: 'true',
+    TRUST_PROXY_HOPS: '1',
     RATE_LIMIT_PER_MINUTE: '100000',
     AUTH_RATE_LIMIT_PER_MINUTE: '100000',
     ...overrides,
@@ -59,7 +59,8 @@ export function call(app: TestApp, method: string, path: string, options: CallOp
 }
 
 export function uniqueIp(): string {
-  return `test-${randomUUID()}`;
+  const groups = randomBytes(12).toString('hex').match(/.{4}/g) as string[];
+  return `2001:db8:${groups.join(':')}`;
 }
 
 export function uniqueEmail(): string {

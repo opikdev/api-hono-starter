@@ -7,9 +7,22 @@ describe('loadConfig', () => {
   it('applies defaults', () => {
     const config = loadConfig({ DATABASE_URL: databaseUrl });
     expect(config.PORT).toBe(3000);
-    expect(config.TRUST_PROXY).toBe(false);
+    expect(config.TRUST_PROXY_HOPS).toBe(0);
     expect(config.CORS_ORIGINS).toEqual([]);
     expect(config.AUTH_RATE_LIMIT_PER_MINUTE).toBe(10);
+    expect(config.DATABASE_POOL_MAX).toBe(10);
+  });
+
+  it('parses the pool size', () => {
+    expect(
+      loadConfig({ DATABASE_URL: databaseUrl, DATABASE_POOL_MAX: '25' }).DATABASE_POOL_MAX,
+    ).toBe(25);
+  });
+
+  it.each(['0', '-1', '2.5', 'many'])('rejects a pool size of %s', (value) => {
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, DATABASE_POOL_MAX: value })).toThrow(
+      /DATABASE_POOL_MAX/,
+    );
   });
 
   it('parses comma-separated origins', () => {
@@ -18,6 +31,18 @@ describe('loadConfig', () => {
       CORS_ORIGINS: 'https://a.example, https://b.example,',
     });
     expect(config.CORS_ORIGINS).toEqual(['https://a.example', 'https://b.example']);
+  });
+
+  it.each(['-1', '1.5', 'true'])('rejects TRUST_PROXY_HOPS=%s', (value) => {
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, TRUST_PROXY_HOPS: value })).toThrow(
+      /TRUST_PROXY_HOPS/,
+    );
+  });
+
+  it.each(['true', 'false', ''])('tells you how to replace TRUST_PROXY=%s', (value) => {
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, TRUST_PROXY: value })).toThrow(
+      'TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior.',
+    );
   });
 
   it('names every invalid variable', () => {

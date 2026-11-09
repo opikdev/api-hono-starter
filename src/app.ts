@@ -19,6 +19,17 @@ import { createRouter } from './platform/router.ts';
 
 const maxBodyBytes = 100 * 1024;
 
+const corsExposedHeaders = [
+  'ETag',
+  'Location',
+  'X-Request-Id',
+  'Retry-After',
+  'RateLimit-Limit',
+  'RateLimit-Remaining',
+  'RateLimit-Reset',
+  'Idempotency-Replayed',
+];
+
 interface AppDependencies {
   config: Config;
   db: Db;
@@ -27,7 +38,7 @@ interface AppDependencies {
 
 export function createApp({ config, db, logger }: AppDependencies) {
   const app = createRouter();
-  const trustProxy = config.TRUST_PROXY;
+  const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
   app.use(httpInstrumentationMiddleware());
   app.use(requestId());
@@ -47,7 +58,7 @@ export function createApp({ config, db, logger }: AppDependencies) {
   });
   app.use(secureHeaders());
   if (config.CORS_ORIGINS.length > 0) {
-    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS }));
+    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS, exposeHeaders: corsExposedHeaders }));
   }
   app.use(
     '/v1/*',
@@ -63,14 +74,14 @@ export function createApp({ config, db, logger }: AppDependencies) {
   );
   app.use(
     '/v1/*',
-    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustProxy }),
+    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustedProxyHops }),
   );
 
   const authRateLimit = rateLimit({
     db,
     name: 'auth',
     limit: config.AUTH_RATE_LIMIT_PER_MINUTE,
-    trustProxy,
+    trustedProxyHops,
   });
   const requireAuth = createRequireAuth(db);
 

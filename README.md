@@ -15,7 +15,7 @@ A production-ready TypeScript API you can run with one command and customize wit
 - **Consistent errors:** RFC 9457 Problem Details everywhere. See the [error reference](docs/errors.md).
 - **Safe data layer:** Drizzle migrations, constraints in the database, and an app role that can't change the schema.
 - **Ready to operate:** a non-root Docker image, health checks, JSON logs, and OpenTelemetry traces.
-- **Agent-ready:** `AGENTS.md`, skills, and checks that run on every commit.
+- **Agent-ready:** `AGENTS.md`, skills, and a pre-commit hook that checks the agent docs, links, decisions, skills, and `.mcp.json`. `pnpm verify` and CI run the full gates.
 - **Strict gates:** strict types, lint, 90% coverage, architecture tests, and real end-to-end tests.
 
 ## Quick start
@@ -76,7 +76,7 @@ Each run creates a temporary database and drops it afterward, so existing data i
 
 | Path            | Purpose                                                                        |
 | --------------- | ------------------------------------------------------------------------------ |
-| `src/features/` | Routes and queries for each feature. `notes` is the sample to copy             |
+| `src/features/` | Routes and queries for each feature. `notes` is the sample feature             |
 | `src/platform/` | Errors, rate limits, idempotency, and logging                                  |
 | `src/db/`       | Schema, connections, migration runner, and seed data                           |
 | `migrations/`   | Generated SQL migrations, which are append-only                                |

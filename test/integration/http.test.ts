@@ -20,7 +20,8 @@ describe('error responses', () => {
 
   it('rejects malformed JSON', async () => {
     const response = await call(app, 'POST', '/v1/users', { rawBody: '{ nope' });
-    await expectProblem(response, 400, 'validation-failed');
+    const problem = await expectProblem(response, 400, 'validation-failed');
+    expect(problem.detail).toBe('The request body is not valid JSON. Fix the syntax and retry.');
   });
 
   it.each([
@@ -118,6 +119,21 @@ describe('CORS', () => {
     const response = await call(withCors, 'GET', '/v1/notes', { headers: { Origin: allowed } });
     expect(response.status).toBe(401);
     expect(response.headers.get('access-control-allow-origin')).toBe(allowed);
+  });
+
+  it('lets a listed origin read the headers clients need', async () => {
+    const response = await call(withCors, 'GET', '/v1/notes', { headers: { Origin: allowed } });
+    const exposed = response.headers.get('access-control-expose-headers')?.split(',');
+    expect(exposed).toEqual([
+      'ETag',
+      'Location',
+      'X-Request-Id',
+      'Retry-After',
+      'RateLimit-Limit',
+      'RateLimit-Remaining',
+      'RateLimit-Reset',
+      'Idempotency-Replayed',
+    ]);
   });
 
   it('never allows an unlisted origin', async () => {

@@ -1,9 +1,10 @@
 import { z } from '@hono/zod-openapi';
 
-const problemCatalog = {
+export const problemCatalog = {
   'validation-failed': { status: 400, title: 'Request validation failed' },
   'invalid-credentials': { status: 401, title: 'Invalid credentials' },
   unauthorized: { status: 401, title: 'Authentication required' },
+  forbidden: { status: 403, title: 'Forbidden' },
   'not-found': { status: 404, title: 'Resource not found' },
   'email-taken': { status: 409, title: 'Email already registered' },
   'version-mismatch': { status: 412, title: 'Resource version mismatch' },
@@ -14,6 +15,7 @@ const problemCatalog = {
   'rate-limited': { status: 429, title: 'Too many requests' },
   'internal-error': { status: 500, title: 'Internal server error' },
   'service-unavailable': { status: 503, title: 'Service unavailable' },
+  timeout: { status: 504, title: 'Request timed out' },
 } as const;
 
 export type ProblemSlug = keyof typeof problemCatalog;
