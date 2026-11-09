@@ -26,7 +26,7 @@ Every error is `application/problem+json` per [RFC 9457](https://www.rfc-editor.
 | `urn:problem:version-mismatch`       | 412    | `If-Match` doesn't match the note's current version               |
 | `urn:problem:payload-too-large`      | 413    | The body is over 100 KiB                                          |
 | `urn:problem:unsupported-media-type` | 415 | The body isn't sent as `application/json` |
-| `urn:problem:idempotency-key-reused` | 422    | The `Idempotency-Key` was used with a different body              |
+| `urn:problem:idempotency-key-reused` | 422    | The `Idempotency-Key` was used on this endpoint with a different body |
 | `urn:problem:precondition-required`  | 428    | `If-Match` is missing                                             |
 | `urn:problem:rate-limited`           | 429    | Too many requests. Wait for `Retry-After` seconds                 |
 | `urn:problem:internal-error`         | 500    | Unexpected failure. Quote the request ID in `detail`              |

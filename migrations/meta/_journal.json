@@ -15,6 +15,13 @@
       "when": 1794196275458,
       "tag": "0001_sessions_user_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794196572009,
+      "tag": "0002_idempotency_keys_endpoint",
+      "breakpoints": true
     }
   ]
 }

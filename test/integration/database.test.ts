@@ -100,6 +100,7 @@ describe('expired row cleanup', () => {
     await db.insert(idempotencyKeys).values([
       {
         userId: expiredId,
+        endpoint: 'POST /v1/notes',
         key: 'old',
         requestHash: 'x',
 
@@ -108,6 +109,7 @@ describe('expired row cleanup', () => {
       },
       {
         userId: liveId,
+        endpoint: 'POST /v1/notes',
         key: 'new',
         requestHash: 'x',
 

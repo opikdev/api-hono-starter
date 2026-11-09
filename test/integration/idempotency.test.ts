@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { notes } from '../../src/db/schema.ts';
+import { idempotencyKeys, notes } from '../../src/db/schema.ts';
+import { withIdempotency } from '../../src/platform/idempotency.ts';
 import { fromPublicId } from '../../src/platform/public-id.ts';
 import { call, db, expectProblem, signUp, testApp } from '../helpers.ts';
 
@@ -70,6 +71,31 @@ describe('idempotent creation', () => {
     expect(secondReplay.headers.get('idempotency-replayed')).toBe('true');
     expect(await firstReplay.json()).toMatchObject({ id: original.id });
     expect(await secondReplay.json()).toMatchObject({ id: other.id });
+  });
+
+  it('never replays a key used on another endpoint', async () => {
+    const { token, userId } = await signUp(app);
+    const uuid = fromPublicId('usr', userId) as string;
+    await post(token, 'shared-endpoint');
+    const other = await withIdempotency(
+      db,
+      {
+        userId: uuid,
+        endpoint: 'POST /v1/projects',
+        key: 'shared-endpoint',
+        payload: { title: 'Once' },
+      },
+      async () => ({ id: 'proj_1' }),
+    );
+    expect(other).toEqual({ body: { id: 'proj_1' }, replayed: false });
+
+    const replay = await post(token, 'shared-endpoint');
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    const keys = await db
+      .select({ endpoint: idempotencyKeys.endpoint })
+      .from(idempotencyKeys)
+      .where(and(eq(idempotencyKeys.userId, uuid), eq(idempotencyKeys.key, 'shared-endpoint')));
+    expect(keys.map((row) => row.endpoint).sort()).toEqual(['POST /v1/notes', 'POST /v1/projects']);
   });
 
   it('creates a new note each time without a key', async () => {

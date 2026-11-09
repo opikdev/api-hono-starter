@@ -89,6 +89,7 @@ export const idempotencyKeys = pgTable(
   {
     id,
     userId: uuid('user_id').notNull(),
+    endpoint: text('endpoint').notNull(),
     key: text('key').notNull(),
     requestHash: text('request_hash').notNull(),
     responseBody: jsonb('response_body').notNull(),
@@ -102,7 +103,7 @@ export const idempotencyKeys = pgTable(
       columns: [table.userId],
       foreignColumns: [users.id],
     }).onDelete('cascade'),
-    unique('uq_idempotency_keys_user_id_key').on(table.userId, table.key),
+    unique('uq_idempotency_keys_user_id_endpoint_key').on(table.userId, table.endpoint, table.key),
     index('idx_idempotency_keys_expires_at').on(table.expiresAt),
   ],
 );

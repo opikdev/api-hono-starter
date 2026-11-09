@@ -18,6 +18,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - An `HTTPException` from Hono or its middleware becomes the problem type for its status, such as 401 `unauthorized`. Before, every 400 said the JSON was malformed, and any other status became a logged 500.
 - CORS exposes `ETag`, `Location`, `X-Request-Id`, `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Idempotency-Replayed`, so browser clients can read them.
+- Idempotency keys are scoped to the endpoint as well as the user, so reusing a key on another endpoint no longer replays that endpoint's response. Migration `0002` adds `idempotency_keys.endpoint`. Keys stored before it stop replaying and expire within 24 hours. Generated features pass the endpoint too.
 
 ## [0.2.3] - 2026-11-09
 
