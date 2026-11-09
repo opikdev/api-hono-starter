@@ -121,6 +121,21 @@ describe('CORS', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe(allowed);
   });
 
+  it('lets a listed origin read the headers clients need', async () => {
+    const response = await call(withCors, 'GET', '/v1/notes', { headers: { Origin: allowed } });
+    const exposed = response.headers.get('access-control-expose-headers')?.split(',');
+    expect(exposed).toEqual([
+      'ETag',
+      'Location',
+      'X-Request-Id',
+      'Retry-After',
+      'RateLimit-Limit',
+      'RateLimit-Remaining',
+      'RateLimit-Reset',
+      'Idempotency-Replayed',
+    ]);
+  });
+
   it('never allows an unlisted origin', async () => {
     const response = await call(withCors, 'GET', '/v1/notes', {
       headers: { Origin: 'https://evil.example' },

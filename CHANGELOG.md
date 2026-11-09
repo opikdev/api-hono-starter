@@ -17,6 +17,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Fixed
 
 - An `HTTPException` from Hono or its middleware becomes the problem type for its status, such as 401 `unauthorized`. Before, every 400 said the JSON was malformed, and any other status became a logged 500.
+- CORS exposes `ETag`, `Location`, `X-Request-Id`, `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Idempotency-Replayed`, so browser clients can read them.
 
 ## [0.2.3] - 2026-11-09
 
