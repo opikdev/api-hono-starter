@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- Error responses, including 404s and 500s, return the `X-Request-Id` header, so the ID quoted in a 500 matches it.
+
 ## [0.2.2] - 2026-11-08
 
 ### Fixed
