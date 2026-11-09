@@ -7,7 +7,12 @@ if (!connectionString) {
   throw new Error('MIGRATION_DATABASE_URL is required to run migrations');
 }
 
-const pool = new pg.Pool({ connectionString, max: 1 });
+const pool = new pg.Pool({
+  connectionString,
+  max: 1,
+  lock_timeout: 5_000,
+  statement_timeout: 300_000,
+});
 try {
   await migrate(drizzle({ client: pool }), { migrationsFolder: 'migrations' });
   console.log('Migrations applied');

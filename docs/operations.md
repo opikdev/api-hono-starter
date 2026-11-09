@@ -46,6 +46,9 @@ Migrations are append-only and forward-only, because Drizzle has no down migrati
 - Rename or retype a column in steps: add the new one, backfill, switch the code, then drop the old one in a later deploy.
 - Hand-edit a generated migration to use `CREATE INDEX CONCURRENTLY` on large tables.
 - Read the generated SQL before merging, because a small diff can take a long lock.
+- `pnpm verify` fails if a migration that's already on `main` changed.
+
+The migration runner applies every pending migration in one transaction. It sets `lock_timeout` to 5 seconds and `statement_timeout` to 5 minutes, so a migration stuck behind a lock fails and rolls back instead of blocking traffic. If that happens, rerun it when the table is quieter.
 
 ## Back up the database
 

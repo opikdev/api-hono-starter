@@ -20,6 +20,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - CORS exposes `ETag`, `Location`, `X-Request-Id`, `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Idempotency-Replayed`, so browser clients can read them.
 - Idempotency keys are scoped to the endpoint as well as the user, so reusing a key on another endpoint no longer replays that endpoint's response. Migration `0002` adds `idempotency_keys.endpoint`. Keys stored before it stop replaying and expire within 24 hours. Generated features pass the endpoint too.
 - `pnpm verify` checks that committed migrations are unchanged locally too, against the merge base with `origin/main`, or `main`. Before, only CI checked. With neither ref, it skips the check and says so.
+- The migration runner sets `lock_timeout` to 5 seconds and `statement_timeout` to 5 minutes, so a migration can't queue behind a lock and block traffic.
 
 ## [0.2.3] - 2026-11-09
 
