@@ -44,11 +44,23 @@ Use `/healthz` for liveness. It stays 200 during a database outage, so restarts 
 Migrations are append-only and forward-only, because Drizzle has no down migrations. To undo one, write a new migration, or restore from a backup if data was lost.
 
 - Rename or retype a column in steps: add the new one, backfill, switch the code, then drop the old one in a later deploy.
-- Hand-edit a generated migration to use `CREATE INDEX CONCURRENTLY` on large tables.
 - Read the generated SQL before merging, because a small diff can take a long lock.
 - `pnpm verify` fails if a migration that's already on `main` changed.
 
 The migration runner applies every pending migration in one transaction. It sets `lock_timeout` to 5 seconds and `statement_timeout` to 5 minutes, so a migration stuck behind a lock fails and rolls back instead of blocking traffic. If that happens, rerun it when the table is quieter.
+
+`CREATE INDEX CONCURRENTLY` can't run inside a transaction, so it fails in a migration. To index a large table without locking writes:
+
+1. Add the index to `src/db/schema.ts`, run `pnpm db:generate`, and change the new migration's `CREATE INDEX` to `CREATE INDEX IF NOT EXISTS` before committing it.
+2. Before you deploy, build the index outside the runner, as the owner role:
+
+   ```sh
+   psql "$MIGRATION_DATABASE_URL" -c 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_notes_title" ON "notes" ("title");'
+   ```
+
+3. Deploy as usual. The migration finds the index and skips it.
+
+If a concurrent build fails, it leaves an invalid index. Drop it with `DROP INDEX CONCURRENTLY`, then build it again.
 
 ## Back up the database
 
