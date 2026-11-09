@@ -39,6 +39,8 @@ Pushing a `vX.Y.Z` tag publishes an image to `ghcr.io`. Deploy in this order:
 
 Use `/healthz` for liveness. It stays 200 during a database outage, so restarts don't make an outage worse.
 
+On `SIGTERM` or `SIGINT`, the API stops accepting connections and gives requests in flight 5 seconds to finish. It then closes the database pool, flushes traces, and exits with code 0. If shutdown takes over 9 seconds, it exits with code 1, so give it a grace period of at least 10 seconds, the Docker default.
+
 ## Change the schema safely
 
 Migrations are append-only and forward-only, because Drizzle has no down migrations. To undo one, write a new migration, or restore from a backup if data was lost.
