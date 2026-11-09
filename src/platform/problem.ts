@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-const problemCatalog = {
+export const problemCatalog = {
   'validation-failed': { status: 400, title: 'Request validation failed' },
   'invalid-credentials': { status: 401, title: 'Invalid credentials' },
   unauthorized: { status: 401, title: 'Authentication required' },
