@@ -4,6 +4,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
 ### Added
 
 - `DATABASE_POOL_MAX` sets the API's database pool size. It defaults to 10, as before.
@@ -13,6 +15,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Changed
 
 - **Breaking:** `TRUST_PROXY_HOPS` replaces `TRUST_PROXY`. Set it to the number of proxies that append to `X-Forwarded-For`, and the API takes the client address that many entries from the right. It defaults to 0, which ignores the header. The API refuses to start while `TRUST_PROXY` is set, so replace `TRUST_PROXY=true` with `TRUST_PROXY_HOPS=1`.
+- The agent harness is v0.3.0. Its check also fails when the harness workflow or pre-commit hook is missing or no longer runs the check.
+- `renovate.json` belongs to the project and extends the shared baseline preset. Generated projects extend only `config:recommended`.
 
 ### Fixed
 
