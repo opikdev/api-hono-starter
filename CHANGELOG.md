@@ -7,6 +7,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Added
 
 - `DATABASE_POOL_MAX` sets the API's database pool size. It defaults to 10, as before.
+- Migration `0001` indexes `sessions.user_id`, so deleting a user doesn't scan every session.
 
 ### Changed
 

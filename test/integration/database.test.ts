@@ -144,6 +144,13 @@ describe('migrations', () => {
     expect(names.filter((name) => !/^(pk|uq|fk|chk)_/.test(name))).toEqual([]);
   });
 
+  it('indexes every foreign key column', async () => {
+    const { rows } = await owner.execute<{ conname: string }>(
+      sql`select c.conname from pg_constraint c where c.connamespace = 'public'::regnamespace and c.contype = 'f' and not exists (select 1 from pg_index i where i.indrelid = c.conrelid and i.indkey[0] = c.conkey[1])`,
+    );
+    expect(rows.map((row) => row.conname)).toEqual([]);
+  });
+
   it('gives every table an id and timestamps', async () => {
     const { rows } = await owner.execute<{ table_name: string; column_name: string }>(
       sql`select c.table_name, c.column_name from information_schema.columns c join information_schema.tables t using (table_schema, table_name) where c.table_schema = 'public' and t.table_type = 'BASE TABLE' and c.column_name in ('id', 'created_at', 'updated_at')`,
