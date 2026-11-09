@@ -31,7 +31,7 @@ Replace the dev passwords in `docker/postgres/init.sql`. Run the file once as th
 
 ## Deploy
 
-Pushing a `vX.Y.Z` tag publishes an image to `ghcr.io`. Deploy in this order:
+Pushing a `vX.Y.Z` tag runs the CI checks, then publishes an image to `ghcr.io` if they pass. Deploy in this order:
 
 1. Run `node src/db/migrate.ts` with `MIGRATION_DATABASE_URL` set to the owner role.
 2. Roll out the new image with `DATABASE_URL` set to `api_app`.
