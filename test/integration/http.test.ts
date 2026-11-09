@@ -20,7 +20,8 @@ describe('error responses', () => {
 
   it('rejects malformed JSON', async () => {
     const response = await call(app, 'POST', '/v1/users', { rawBody: '{ nope' });
-    await expectProblem(response, 400, 'validation-failed');
+    const problem = await expectProblem(response, 400, 'validation-failed');
+    expect(problem.detail).toBe('The request body is not valid JSON. Fix the syntax and retry.');
   });
 
   it.each([
