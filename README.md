@@ -44,6 +44,16 @@ curl localhost:3000/v1/notes -H 'Authorization: Bearer <YOUR_TOKEN>'
 
 If port 3000 or 5432 is taken, set `PORT` or `POSTGRES_PORT` before running Compose.
 
+## Start your own project
+
+Create a renamed copy with [pik](https://github.com/opikdev/pik). It downloads this starter's latest release, then sets your project name and GitHub owner:
+
+```sh
+pik new api-hono-starter my-api
+```
+
+Or select **Use this template** on GitHub. That copy keeps the name `api-hono-starter` and the owner `opikdev`, so follow `pik.yaml` by hand: swap the `replace` text, delete the `exclude` paths, and run the `setup` commands.
+
 ## Usage
 
 To work on the code, you need Node 26 or later and pnpm:
