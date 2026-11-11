@@ -4,7 +4,7 @@ import { fromPublicId, type IdPrefix } from './public-id.ts';
 
 const maxVersion = 2_147_483_647;
 
-export const bearerSecurity = [{ bearerAuth: [] }];
+export const sessionSecurity = [{ bearerAuth: [] }, { cookieAuth: [] }];
 
 export const hasNoNul = (value: string) => !value.includes('\0');
 export const nulMessage = 'Must not contain NUL characters';

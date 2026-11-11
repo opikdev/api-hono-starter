@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS, body limit, rate limit"]
+  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS, cross-origin check, body limit, rate limit"]
   M --> R["Feature routes"]
   R --> S["Stores"]
   S --> P[(Postgres)]
@@ -24,6 +24,8 @@ flowchart LR
 
 - **Contract:** route definitions generate `openapi.json`, and a test fails if the committed file is out of date. Chained routes also produce `AppType` for the typed client.
 - **Errors:** every failure is RFC 9457 Problem Details. Unexpected errors are logged and recorded on the trace, and the client only sees a request ID.
+- **Sessions:** login returns an opaque token in the body, or sets it in an `HttpOnly` `__Host-session` cookie for a browser app on the same origin. An `Authorization` header always wins over the cookie. See [ADR 006](decisions/006-cookie-sessions-for-same-origin-browser-apps.md).
+- **Cross-origin writes:** a `/v1` request that isn't `GET`, `HEAD`, or `OPTIONS` gets 403 if `Sec-Fetch-Site` or `Origin` shows it came from another site, unless the origin is in `CORS_ORIGINS`.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
 - **Idempotency:** keys are scoped to the user and the endpoint, such as `POST /v1/notes`. The key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.

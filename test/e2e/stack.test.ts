@@ -136,6 +136,44 @@ describe('the running stack', () => {
     expect((await json(path, { headers })).status).toBe(404);
   });
 
+  it('keeps a browser session in a cookie and blocks cross-site writes', async () => {
+    const sameOrigin = { 'Sec-Fetch-Site': 'same-origin' };
+    const login = await fetch(`${baseUrl}/v1/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...sameOrigin },
+      body: JSON.stringify({
+        email: 'demo@example.com',
+        password: 'demo-password-123',
+        delivery: 'cookie',
+      }),
+    });
+    expect(login.status).toBe(201);
+    expect(Object.keys((await login.json()) as object)).toEqual(['expiresAt']);
+    const setCookie = login.headers.get('set-cookie') ?? '';
+    expect(setCookie).toMatch(
+      /^__Host-session=[\w-]+; Max-Age=\d+; Path=\/; HttpOnly; Secure; SameSite=Strict$/,
+    );
+    const cookie = { Cookie: setCookie.split(';')[0] as string };
+
+    const notes = await json('/v1/notes', { headers: cookie });
+    expect((notes.body.data as unknown[]).length).toBe(2);
+
+    const forged = await json('/v1/notes', {
+      method: 'POST',
+      headers: { ...cookie, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' },
+      body: JSON.stringify({ title: 'Forged' }),
+    });
+    expect(forged).toMatchObject({ status: 403, body: { type: 'urn:problem:forbidden' } });
+
+    const logout = await fetch(`${baseUrl}/v1/sessions/current`, {
+      method: 'DELETE',
+      headers: { ...cookie, ...sameOrigin },
+    });
+    expect(logout.status).toBe(204);
+    expect(logout.headers.get('set-cookie')).toMatch(/^__Host-session=; Max-Age=0;/);
+    expect((await json('/v1/notes', { headers: cookie })).status).toBe(401);
+  });
+
   it('returns Problem Details with the right content type', async () => {
     const response = await fetch(`${baseUrl}/v1/nope`);
     expect(response.status).toBe(404);

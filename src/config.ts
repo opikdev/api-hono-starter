@@ -17,7 +17,7 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
-  SESSION_TTL_HOURS: z.coerce.number().int().positive().default(168),
+  SESSION_TTL_HOURS: z.coerce.number().int().positive().max(9600).default(168),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
 });

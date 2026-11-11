@@ -7,6 +7,17 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Added
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
+- `POST /v1/sessions` takes `delivery: "cookie"` to set the session in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie named `__Host-session` instead of returning the token. The default, `delivery: "body"`, works as before. See [Log in from a browser](docs/client.md#log-in-from-a-browser).
+- Protected routes accept the `__Host-session` cookie when no `Authorization` header is sent, and the OpenAPI document lists it as the `cookieAuth` scheme. A 401 for an invalid cookie, and every logout, clears it.
+
+### Changed
+
+- `bearerSecurity` in `src/platform/resource.ts` is now `sessionSecurity`, and lists both schemes. Rename it in features you generated.
+- `SESSION_TTL_HOURS` is at most 9600, the 400 days a browser keeps a cookie. The API refuses to start with a larger value.
+
+### Security
+
+- `/v1` requests other than `GET`, `HEAD`, and `OPTIONS` pass a cross-origin check, the algorithm of Go's `CrossOriginProtection`, before auth runs. Bearer clients outside a browser are unaffected, but cross-site browser requests that change data now get 403 `forbidden` unless their origin is in `CORS_ORIGINS`.
 
 ## [0.3.0] - 2026-11-09
 

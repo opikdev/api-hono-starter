@@ -276,7 +276,6 @@ import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
-  bearerSecurity,
   etag,
 ${textImports}  idempotencyHeaders,
   idParams,
@@ -286,6 +285,7 @@ ${textImports}  idempotencyHeaders,
 ${nulImport}  pageSchema,
   parseCursor,
   parseIfMatch,
+  sessionSecurity,
   toPage,
 } from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
@@ -369,7 +369,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         operationId: 'create${Singular}',
         summary: 'Create ${article}${singularLabel.startsWith(' ') ? '' : ' '}${singularLabel}',
         tags: ['${Plural}'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: {
           headers: idempotencyHeaders,
@@ -413,7 +413,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         operationId: 'list${Plural}',
         summary: 'List your ${label}, newest first',
         tags: ['${Plural}'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { query: listQuery },
         responses: {
@@ -435,7 +435,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         operationId: 'get${Singular}',
         summary: 'Get ${article}${singularLabel.startsWith(' ') ? '' : ' '}${singularLabel}',
         tags: ['${Plural}'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
@@ -460,7 +460,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         operationId: 'update${Singular}',
         summary: 'Update ${article}${singularLabel.startsWith(' ') ? '' : ' '}${singularLabel}',
         tags: ['${Plural}'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: {
           params: idParams,
@@ -508,7 +508,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         operationId: 'delete${Singular}',
         summary: 'Delete ${article}${singularLabel.startsWith(' ') ? '' : ' '}${singularLabel}',
         tags: ['${Plural}'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {

@@ -11,6 +11,7 @@ import { createRequireAuth } from './features/auth/middleware.ts';
 import { createAuthRouter } from './features/auth/routes.ts';
 import { createHealthRouter } from './features/health/routes.ts';
 import { createNotesRouter } from './features/notes/routes.ts';
+import { crossOriginProtection } from './platform/cross-origin.ts';
 import { createErrorHandler, respond } from './platform/error-handler.ts';
 import type { Logger } from './platform/logger.ts';
 import { ProblemError, type ProblemResponses } from './platform/problem.ts';
@@ -60,6 +61,7 @@ export function createApp({ config, db, logger }: AppDependencies) {
   if (config.CORS_ORIGINS.length > 0) {
     app.use('/v1/*', cors({ origin: config.CORS_ORIGINS, exposeHeaders: corsExposedHeaders }));
   }
+  app.use('/v1/*', crossOriginProtection(config.CORS_ORIGINS));
   app.use(
     '/v1/*',
     bodyLimit({
@@ -101,6 +103,11 @@ export function createApp({ config, db, logger }: AppDependencies) {
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
     type: 'http',
     scheme: 'bearer',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'cookieAuth', {
+    type: 'apiKey',
+    in: 'cookie',
+    name: '__Host-session',
   });
   app.doc31('/openapi.json', {
     openapi: '3.1.0',

@@ -232,7 +232,10 @@ describe('OpenAPI', () => {
 
       expect(operation.responses['429'], `${path} documents 429`).toBeDefined();
       if (!publicOperations.includes(operation.operationId as string)) {
-        expect(operation.security, `${path} declares auth`).toEqual([{ bearerAuth: [] }]);
+        expect(operation.security, `${path} declares auth`).toEqual([
+          { bearerAuth: [] },
+          { cookieAuth: [] },
+        ]);
         expect(operation.responses['401'], `${path} documents 401`).toBeDefined();
       }
       for (const [status, response] of Object.entries(operation.responses)) {

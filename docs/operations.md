@@ -11,9 +11,9 @@ Set these on the API process. `.env.example` lists every option with a safe defa
 | `LOG_LEVEL`                     | string  | `info`   | `debug`, `info`, `warn`, `error`, or `silent`                       |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | number  | `5000`   | Cancels slow queries                                                |
 | `DATABASE_POOL_MAX`             | number  | `10`     | Most database connections each API process opens. At least 1        |
-| `CORS_ORIGINS`                  | list    | Empty    | Comma-separated browser origins. Empty disables CORS                |
+| `CORS_ORIGINS`                  | list    | Empty    | Comma-separated browser origins that may call the API, including requests that change data. Empty disables CORS |
 | `TRUST_PROXY_HOPS`              | number  | `0`      | How many proxies in front of the API append to `X-Forwarded-For`    |
-| `SESSION_TTL_HOURS`             | number  | `168`    | Session lifetime                                                    |
+| `SESSION_TTL_HOURS`             | number  | `168`    | Session lifetime. At most 9600, the 400 days a browser keeps a cookie |
 | `RATE_LIMIT_PER_MINUTE`         | number  | `300`    | Per client, across `/v1`                                            |
 | `AUTH_RATE_LIMIT_PER_MINUTE`    | number  | `10`     | Per client, on registration and login                               |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`   | URL     | Empty    | Turns on trace and error export                                     |

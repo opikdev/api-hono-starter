@@ -3,19 +3,32 @@ import type { Db } from '../../db/client.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { toPublicId } from '../../platform/public-id.ts';
 import type { RateLimit } from '../../platform/rate-limit.ts';
+import { sessionSecurity } from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
+import { clearSessionCookie, setSessionCookie } from './cookie.ts';
 import type { RequireAuth } from './middleware.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { createSession, createUser, deleteSession, findUserByEmail } from './store.ts';
 
 const unknownUserPasswordHash = await hashPassword('timing-equalizer');
 
-const credentialsSchema = z
+const credentialFields = {
+  email: z.email().max(254).toLowerCase().openapi({ example: 'ada@example.com' }),
+  password: z.string().min(12).max(128).openapi({ example: 'correct-horse-battery' }),
+};
+
+const credentialsSchema = z.strictObject(credentialFields).openapi('Credentials');
+
+const loginSchema = z
   .strictObject({
-    email: z.email().max(254).toLowerCase().openapi({ example: 'ada@example.com' }),
-    password: z.string().min(12).max(128).openapi({ example: 'correct-horse-battery' }),
+    ...credentialFields,
+    delivery: z.enum(['body', 'cookie']).default('body').openapi({
+      description:
+        '`body` returns the token in the response. `cookie` sets it in an `HttpOnly` cookie instead, for a browser app on the same origin as the API.',
+      example: 'cookie',
+    }),
   })
-  .openapi('Credentials');
+  .openapi('Login');
 
 const userSchema = z
   .object({
@@ -27,10 +40,33 @@ const userSchema = z
 
 const sessionSchema = z
   .object({
-    token: z.string().openapi({ description: 'Send as `Authorization: Bearer <token>`.' }),
+    token: z.string().optional().openapi({
+      description: 'Present when `delivery` is `body`. Send it as `Authorization: Bearer <token>`.',
+    }),
     expiresAt: z.iso.datetime().openapi({ example: '2026-11-14T15:20:30.000Z' }),
   })
   .openapi('Session');
+
+const sessionCookieHeader = {
+  'Set-Cookie': {
+    description:
+      'Sent when `delivery` is `cookie`. Browsers send the cookie back on every request.',
+    schema: {
+      type: 'string' as const,
+      example: '__Host-session=<token>; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Strict',
+    },
+  },
+};
+
+const clearedCookieHeader = {
+  'Set-Cookie': {
+    description: 'Clears the session cookie.',
+    schema: {
+      type: 'string' as const,
+      example: '__Host-session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict',
+    },
+  },
+};
 
 const jsonBody = <T extends z.ZodType>(schema: T) => ({
   content: { 'application/json': { schema } },
@@ -99,10 +135,11 @@ export function createAuthRouter({
         description: 'Exempt from Idempotency-Key, because a replay would have to store the token.',
         tags: ['Auth'],
         middleware: [authRateLimit],
-        request: { body: jsonBody(credentialsSchema) },
+        request: { body: jsonBody(loginSchema) },
         responses: {
           201: {
             description: 'Session created',
+            headers: sessionCookieHeader,
             content: { 'application/json': { schema: sessionSchema } },
           },
           ...problemResponses(
@@ -114,7 +151,7 @@ export function createAuthRouter({
         },
       }),
       async (c) => {
-        const { email, password } = c.req.valid('json');
+        const { email, password, delivery } = c.req.valid('json');
         const user = await findUserByEmail(db, email);
         const matches = await verifyPassword(
           password,
@@ -125,8 +162,13 @@ export function createAuthRouter({
         }
 
         const session = await createSession(db, user.id, sessionTtlHours);
+        const expiresAt = session.expiresAt.toISOString();
         c.header('Cache-Control', 'no-store');
-        return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString() }, 201);
+        if (delivery === 'cookie') {
+          setSessionCookie(c, session.token, sessionTtlHours * 3600);
+          return c.json({ expiresAt }, 201);
+        }
+        return c.json({ token: session.token, expiresAt }, 201);
       },
     )
     .openapi(
@@ -136,15 +178,16 @@ export function createAuthRouter({
         operationId: 'deleteCurrentSession',
         summary: 'Log out',
         tags: ['Auth'],
-        security: [{ bearerAuth: [] }],
+        security: sessionSecurity,
         middleware: [requireAuth],
         responses: {
-          204: { description: 'Session revoked' },
+          204: { description: 'Session revoked', headers: clearedCookieHeader },
           ...problemResponses('unauthorized', 'rate-limited'),
         },
       }),
       async (c) => {
         await deleteSession(db, c.get('user').sessionId);
+        clearSessionCookie(c);
         return c.body(null, 204);
       },
     )
@@ -155,7 +198,7 @@ export function createAuthRouter({
         operationId: 'getCurrentUser',
         summary: 'Get the current user',
         tags: ['Auth'],
-        security: [{ bearerAuth: [] }],
+        security: sessionSecurity,
         middleware: [requireAuth],
         responses: {
           200: {
