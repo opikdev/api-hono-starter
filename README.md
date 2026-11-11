@@ -10,7 +10,7 @@ A production-ready TypeScript API you can run with one command and customize wit
 - **Contract first:** OpenAPI 3.1 is generated from the routes, with docs at `/docs`.
 - **Feature generator:** `pnpm gen:feature` creates a full CRUD feature with tests that pass every gate. Answer prompts, or pass it all on one line.
 - **Typed client:** `AppType` gives TypeScript callers every route and response type through Hono RPC. See [Call the API from TypeScript](docs/client.md).
-- **Auth:** registration, login, and revocable session tokens, with per-user data access.
+- **Auth:** registration, login, and revocable sessions, with per-user data access. Send the token as a bearer header, or [keep it in an `HttpOnly` cookie](docs/client.md#log-in-from-a-browser) for a browser app on the same origin.
 - **Reliable by default:** rate limits, idempotency keys, optimistic concurrency, and cursor pagination.
 - **Consistent errors:** RFC 9457 Problem Details everywhere. See the [error reference](docs/errors.md).
 - **Safe data layer:** Drizzle migrations, constraints in the database, and an app role that can't change the schema.

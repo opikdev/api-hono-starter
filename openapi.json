@@ -9,6 +9,11 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-session"
       }
     },
     "schemas": {
@@ -127,7 +132,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "description": "Send as `Authorization: Bearer <token>`."
+            "description": "Present when `delivery` is `body`. Send it as `Authorization: Bearer <token>`."
           },
           "expiresAt": {
             "type": "string",
@@ -136,9 +141,40 @@
           }
         },
         "required": [
-          "token",
           "expiresAt"
         ]
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "example": "ada@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "example": "correct-horse-battery"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "body",
+              "cookie"
+            ],
+            "default": "body",
+            "description": "`body` returns the token in the response. `cookie` sets it in an `HttpOnly` cookie instead, for a browser app on the same origin as the API.",
+            "example": "cookie"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
       },
       "Note": {
         "type": "object",
@@ -392,7 +428,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Credentials"
+                "$ref": "#/components/schemas/Login"
               }
             }
           }
@@ -400,6 +436,15 @@
         "responses": {
           "201": {
             "description": "Session created",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sent when `delivery` is `cookie`. Browsers send the cookie back on every request.",
+                "schema": {
+                  "type": "string",
+                  "example": "__Host-session=<token>; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Strict"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -461,11 +506,23 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
           "204": {
-            "description": "Session revoked"
+            "description": "Session revoked",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Clears the session cookie.",
+                "schema": {
+                  "type": "string",
+                  "example": "__Host-session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict"
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required",
@@ -500,6 +557,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -546,6 +606,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -644,6 +707,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -724,6 +790,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -788,6 +857,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -913,6 +985,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [

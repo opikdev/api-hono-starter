@@ -45,6 +45,18 @@ describe('loadConfig', () => {
     );
   });
 
+  it.each(['0', '9601'])('rejects SESSION_TTL_HOURS=%s', (value) => {
+    expect(() => loadConfig({ DATABASE_URL: databaseUrl, SESSION_TTL_HOURS: value })).toThrow(
+      /SESSION_TTL_HOURS/,
+    );
+  });
+
+  it('accepts a session lifetime of up to 400 days, the longest a browser keeps a cookie', () => {
+    expect(
+      loadConfig({ DATABASE_URL: databaseUrl, SESSION_TTL_HOURS: '9600' }).SESSION_TTL_HOURS,
+    ).toBe(9600);
+  });
+
   it('names every invalid variable', () => {
     expect(() => loadConfig({ PORT: 'not-a-port' })).toThrow(/PORT.*DATABASE_URL/);
   });

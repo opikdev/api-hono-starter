@@ -6,6 +6,38 @@ import { call, db, expectProblem, password, signUp, testApp, uniqueEmail } from 
 
 const app = testApp();
 
+const cookieAttributes = ['Max-Age=604800', 'Path=/', 'HttpOnly', 'Secure', 'SameSite=Strict'];
+const clearingAttributes = ['Max-Age=0', 'Path=/', 'HttpOnly', 'Secure', 'SameSite=Strict'];
+
+function parseSetCookie(response: Response) {
+  const [pair = '', ...attributes] = response.headers.get('set-cookie')?.split('; ') ?? [];
+  const [name, value] = pair.split('=');
+  return { name, value, attributes };
+}
+
+async function logInWithCookie(email: string, headers: Record<string, string> = {}) {
+  const response = await call(app, 'POST', '/v1/sessions', {
+    body: { email, password, delivery: 'cookie' },
+    headers,
+  });
+  const { value } = parseSetCookie(response);
+  return { response, cookie: `__Host-session=${value}` };
+}
+
+async function signUpWithCookie() {
+  const { email, userId } = await signUp(app);
+  const { cookie } = await logInWithCookie(email);
+  return { email, userId, cookie };
+}
+
+function expectClearedCookie(response: Response) {
+  expect(parseSetCookie(response)).toEqual({
+    name: '__Host-session',
+    value: '',
+    attributes: clearingAttributes,
+  });
+}
+
 describe('registration', () => {
   it('creates a user and hides the password', async () => {
     const email = uniqueEmail();
@@ -73,10 +105,68 @@ describe('sessions', () => {
     const response = await call(app, 'POST', '/v1/sessions', { body: { email, password } });
     expect(response.status).toBe(201);
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('set-cookie')).toBeNull();
     const { token, expiresAt } = (await response.json()) as { token: string; expiresAt: string };
     expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now());
     const stored = await db.select({ hash: sessions.tokenHash }).from(sessions);
     expect(stored.map((row) => row.hash)).not.toContain(token);
+  });
+
+  it('returns the token in the body when delivery is body', async () => {
+    const { email } = await signUp(app);
+    const response = await call(app, 'POST', '/v1/sessions', {
+      body: { email, password, delivery: 'body' },
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual(['expiresAt', 'token']);
+  });
+
+  it('sets an HttpOnly host cookie and leaves the token out of the body', async () => {
+    const { email } = await signUp(app);
+    const { response } = await logInWithCookie(email);
+    expect(response.status).toBe(201);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const { name, value, attributes } = parseSetCookie(response);
+    expect(name).toBe('__Host-session');
+    expect(value).toMatch(/^[\w-]{43}$/);
+    expect(attributes).toEqual(cookieAttributes);
+    const body = (await response.json()) as Record<string, string>;
+    expect(Object.keys(body)).toEqual(['expiresAt']);
+    expect(new Date(body.expiresAt as string).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('issues a fresh cookie on each login, even when one is sent', async () => {
+    const { email } = await signUp(app);
+    const first = await logInWithCookie(email);
+    const second = await logInWithCookie(email, { Cookie: first.cookie });
+    expect(second.cookie).not.toBe(first.cookie);
+  });
+
+  it.each([
+    ['an unknown delivery', 'header'],
+    ['a differently cased delivery', 'Cookie'],
+  ])('rejects %s', async (_label, delivery) => {
+    const { email } = await signUp(app);
+    const response = await call(app, 'POST', '/v1/sessions', {
+      body: { email, password, delivery },
+    });
+    const problem = await expectProblem(response, 400, 'validation-failed');
+    expect(problem.errors).toEqual([expect.objectContaining({ field: 'delivery' })]);
+  });
+
+  it('rejects unknown fields on login', async () => {
+    const response = await call(app, 'POST', '/v1/sessions', {
+      body: { email: uniqueEmail(), password, remember: true },
+    });
+    await expectProblem(response, 400, 'validation-failed');
+  });
+
+  it('keeps delivery off registration', async () => {
+    const response = await call(app, 'POST', '/v1/users', {
+      body: { email: uniqueEmail(), password, delivery: 'cookie' },
+    });
+    await expectProblem(response, 400, 'validation-failed');
   });
 
   it('rejects a wrong password', async () => {
@@ -110,8 +200,12 @@ describe('authentication', () => {
     ['the wrong scheme', { headers: { Authorization: 'Basic abc' } }],
   ])('rejects %s', async (_label, options) => {
     const response = await call(app, 'GET', '/v1/users/me', options);
-    await expectProblem(response, 401, 'unauthorized');
+    const problem = await expectProblem(response, 401, 'unauthorized');
+    expect(problem.detail).toBe(
+      'Send a valid session token in the Authorization header as `Bearer <token>`, or log in with `delivery: "cookie"` from the same origin.',
+    );
     expect(response.headers.get('www-authenticate')).toBe('Bearer');
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
 
   it('rejects an expired session', async () => {
@@ -131,11 +225,91 @@ describe('authentication', () => {
     await expectProblem(response, 401, 'unauthorized');
   });
 
+  it('clears the cookie on logout with a bearer token too', async () => {
+    const { token } = await signUp(app);
+    const response = await call(app, 'DELETE', '/v1/sessions/current', { token });
+    expect(response.status).toBe(204);
+    expectClearedCookie(response);
+  });
+
   it('keeps other sessions alive on logout', async () => {
     const { email, token } = await signUp(app);
     const second = await call(app, 'POST', '/v1/sessions', { body: { email, password } });
     const { token: other } = (await second.json()) as { token: string };
     await call(app, 'DELETE', '/v1/sessions/current', { token });
     expect((await call(app, 'GET', '/v1/users/me', { token: other })).status).toBe(200);
+  });
+});
+
+describe('cookie authentication', () => {
+  it('returns the current user from the cookie alone', async () => {
+    const { email, userId, cookie } = await signUpWithCookie();
+    const response = await call(app, 'GET', '/v1/users/me', { headers: { Cookie: cookie } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: userId, email });
+  });
+
+  it('prefers the Authorization header over the cookie', async () => {
+    const bearer = await signUp(app);
+    const { cookie } = await signUpWithCookie();
+    const response = await call(app, 'GET', '/v1/users/me', {
+      token: bearer.token,
+      headers: { Cookie: cookie },
+    });
+    expect(await response.json()).toMatchObject({ id: bearer.userId });
+  });
+
+  it.each([
+    ['a wrong token', { Authorization: 'Bearer not-a-real-token' }],
+    ['the wrong scheme', { Authorization: 'Basic abc' }],
+    ['an empty header', { Authorization: '' }],
+  ])('rejects %s even with a valid cookie', async (_label, headers) => {
+    const { cookie } = await signUpWithCookie();
+    const response = await call(app, 'GET', '/v1/users/me', {
+      headers: { ...headers, Cookie: cookie },
+    });
+    await expectProblem(response, 401, 'unauthorized');
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it.each([
+    ['an unknown cookie', '__Host-session=not-a-real-token'],
+    ['an empty cookie', '__Host-session='],
+  ])('rejects %s and clears it', async (_label, cookie) => {
+    const response = await call(app, 'GET', '/v1/users/me', { headers: { Cookie: cookie } });
+    await expectProblem(response, 401, 'unauthorized');
+    expect(response.headers.get('www-authenticate')).toBe('Bearer');
+    expectClearedCookie(response);
+  });
+
+  it('ignores a cookie without the host prefix', async () => {
+    const { cookie } = await signUpWithCookie();
+    const response = await call(app, 'GET', '/v1/users/me', {
+      headers: { Cookie: cookie.replace('__Host-', '') },
+    });
+    await expectProblem(response, 401, 'unauthorized');
+  });
+
+  it('rejects an expired cookie and clears it', async () => {
+    const { userId, cookie } = await signUpWithCookie();
+    await db
+      .update(sessions)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(sessions.userId, fromPublicId('usr', userId) as string));
+    const response = await call(app, 'GET', '/v1/users/me', { headers: { Cookie: cookie } });
+    await expectProblem(response, 401, 'unauthorized');
+    expectClearedCookie(response);
+  });
+
+  it('revokes the cookie session on logout and clears it', async () => {
+    const { cookie } = await signUpWithCookie();
+    const logout = await call(app, 'DELETE', '/v1/sessions/current', {
+      headers: { Cookie: cookie },
+    });
+    expect(logout.status).toBe(204);
+    expectClearedCookie(logout);
+    const response = await call(app, 'GET', '/v1/users/me', { headers: { Cookie: cookie } });
+    await expectProblem(response, 401, 'unauthorized');
+    expectClearedCookie(response);
   });
 });

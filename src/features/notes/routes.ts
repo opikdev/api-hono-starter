@@ -4,7 +4,6 @@ import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
-  bearerSecurity,
   etag,
   hasNoNul,
   idempotencyHeaders,
@@ -16,6 +15,7 @@ import {
   pageSchema,
   parseCursor,
   parseIfMatch,
+  sessionSecurity,
   toPage,
 } from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
@@ -92,7 +92,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'createNote',
         summary: 'Create a note',
         tags: ['Notes'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: {
           headers: idempotencyHeaders,
@@ -136,7 +136,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'listNotes',
         summary: 'List your notes, newest first',
         tags: ['Notes'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { query: listQuery },
         responses: {
@@ -158,7 +158,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'getNote',
         summary: 'Get a note',
         tags: ['Notes'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
@@ -183,7 +183,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'updateNote',
         summary: 'Update a note',
         tags: ['Notes'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: {
           params: idParams,
@@ -236,7 +236,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         operationId: 'deleteNote',
         summary: 'Delete a note',
         tags: ['Notes'],
-        security: bearerSecurity,
+        security: sessionSecurity,
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
