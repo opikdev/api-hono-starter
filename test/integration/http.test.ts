@@ -129,9 +129,8 @@ describe('CORS', () => {
       'Location',
       'X-Request-Id',
       'Retry-After',
-      'RateLimit-Limit',
-      'RateLimit-Remaining',
-      'RateLimit-Reset',
+      'RateLimit',
+      'RateLimit-Policy',
       'Idempotency-Replayed',
     ]);
   });

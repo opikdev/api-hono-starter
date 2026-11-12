@@ -20,6 +20,8 @@ const envSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(9600).default(168),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  LOGIN_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
+  LOGIN_FAILURE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export type Config = z.infer<typeof envSchema>;

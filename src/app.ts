@@ -15,7 +15,7 @@ import { crossOriginProtection } from './platform/cross-origin.ts';
 import { createErrorHandler, respond } from './platform/error-handler.ts';
 import type { Logger } from './platform/logger.ts';
 import { ProblemError, type ProblemResponses } from './platform/problem.ts';
-import { rateLimit } from './platform/rate-limit.ts';
+import { loginFailureLimit, rateLimit } from './platform/rate-limit.ts';
 import { createRouter } from './platform/router.ts';
 
 const maxBodyBytes = 100 * 1024;
@@ -25,9 +25,8 @@ const corsExposedHeaders = [
   'Location',
   'X-Request-Id',
   'Retry-After',
-  'RateLimit-Limit',
-  'RateLimit-Remaining',
-  'RateLimit-Reset',
+  'RateLimit',
+  'RateLimit-Policy',
   'Idempotency-Replayed',
 ];
 
@@ -85,6 +84,11 @@ export function createApp({ config, db, logger }: AppDependencies) {
     limit: config.AUTH_RATE_LIMIT_PER_MINUTE,
     trustedProxyHops,
   });
+  const loginFailures = loginFailureLimit({
+    db,
+    limit: config.LOGIN_FAILURE_LIMIT,
+    windowSeconds: config.LOGIN_FAILURE_WINDOW_SECONDS,
+  });
   const requireAuth = createRequireAuth(db);
 
   const routes = app
@@ -95,6 +99,7 @@ export function createApp({ config, db, logger }: AppDependencies) {
         db,
         requireAuth,
         authRateLimit,
+        loginFailures,
         sessionTtlHours: config.SESSION_TTL_HOURS,
       }),
     )

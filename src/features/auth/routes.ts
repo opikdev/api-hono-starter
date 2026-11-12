@@ -2,7 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { toPublicId } from '../../platform/public-id.ts';
-import type { RateLimit } from '../../platform/rate-limit.ts';
+import type { LoginFailureLimit, RateLimit } from '../../platform/rate-limit.ts';
 import { sessionSecurity } from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
 import { clearSessionCookie, setSessionCookie } from './cookie.ts';
@@ -91,6 +91,7 @@ interface AuthRouterOptions {
   db: Db;
   requireAuth: RequireAuth;
   authRateLimit: RateLimit;
+  loginFailures: LoginFailureLimit;
   sessionTtlHours: number;
 }
 
@@ -98,6 +99,7 @@ export function createAuthRouter({
   db,
   requireAuth,
   authRateLimit,
+  loginFailures,
   sessionTtlHours,
 }: AuthRouterOptions) {
   return createRouter()
@@ -158,14 +160,18 @@ export function createAuthRouter({
       }),
       async (c) => {
         const { email, password, delivery } = c.req.valid('json');
+        const attempt = await loginFailures(c, email);
         const user = await findUserByEmail(db, email);
+        const stored = attempt.blocked ? undefined : user?.passwordHash;
         const { valid, needsRehash } = await verifyPassword(
           password,
-          user?.passwordHash ?? unknownUserPasswordHash,
+          stored ?? unknownUserPasswordHash,
         );
+        if (attempt.blocked) throw attempt.blocked;
         if (!user || !valid) {
           throw new ProblemError('invalid-credentials', 'The email or password is wrong.');
         }
+        await attempt.succeeded();
         if (needsRehash) await updatePasswordHash(db, user.id, await hashPassword(password));
 
         const session = await createSession(db, user.id, sessionTtlHours);
