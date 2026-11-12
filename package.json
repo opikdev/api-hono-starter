@@ -45,6 +45,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
     "@clack/prompts": "^1.8.1",
+    "@opentelemetry/context-async-hooks": "^3.1.0",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",

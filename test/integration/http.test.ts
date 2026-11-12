@@ -8,7 +8,7 @@ import { call, db, expectProblem, signUp, testApp, testConfig } from '../helpers
 const app = testApp();
 
 function spyLogger() {
-  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   return { logger, asLogger: logger as unknown as Logger };
 }
 
@@ -213,6 +213,16 @@ describe('logging', () => {
     const entry = JSON.stringify(logger.info.mock.calls);
     expect(entry).not.toContain(token);
     expect(entry).toContain('"status":200');
+  });
+});
+
+describe('health check logging', () => {
+  it.each(['/healthz', '/readyz'])('logs %s at debug, not info', async (path) => {
+    const { logger, asLogger } = spyLogger();
+    const logged = createApp({ config: testConfig(), db, logger: asLogger });
+    await call(logged, 'GET', path);
+    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledOnce();
   });
 });
 

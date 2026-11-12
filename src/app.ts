@@ -22,6 +22,7 @@ import { createRouter } from './platform/router.ts';
 import type { Readiness } from './platform/shutdown.ts';
 
 const maxBodyBytes = 100 * 1024;
+const healthPaths = new Set(['/healthz', '/readyz']);
 const apiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
 
 const corsExposedHeaders = [
@@ -50,12 +51,14 @@ export function createApp({
   const app = createRouter();
   const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
-  app.use(httpInstrumentationMiddleware());
+  const instrumentation = httpInstrumentationMiddleware();
+  app.use((c, next) => (healthPaths.has(c.req.path) ? next() : instrumentation(c, next)));
   app.use(requestId());
   app.use(async (c, next) => {
     const startedAt = performance.now();
     await next();
-    logger.info(
+    const level = healthPaths.has(c.req.path) ? 'debug' : 'info';
+    logger[level](
       {
         requestId: c.get('requestId'),
         method: c.req.method,
