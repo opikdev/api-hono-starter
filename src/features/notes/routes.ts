@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
 import { idempotencyScope, withIdempotency } from '../../platform/idempotency.ts';
+import { headerRefs } from '../../platform/openapi.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -99,14 +100,12 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
           body: { ...jsonContent(createNoteSchema), required: true },
         },
         responses: {
-          201: { description: 'Note created', ...jsonContent(noteSchema) },
-          ...problemResponses(
-            'validation-failed',
-            'unauthorized',
-            'idempotency-key-reused',
-            'unsupported-media-type',
-            'rate-limited',
-          ),
+          201: {
+            description: 'Note created',
+            headers: headerRefs('ETag', 'Location', 'Idempotency-Replayed'),
+            ...jsonContent(noteSchema),
+          },
+          ...problemResponses('validation-failed', 'unauthorized', 'idempotency-key-reused'),
         },
       }),
       async (c) => {
@@ -140,7 +139,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         request: { query: listQuery },
         responses: {
           200: { description: 'A page of notes', ...jsonContent(noteListSchema) },
-          ...problemResponses('validation-failed', 'unauthorized', 'rate-limited'),
+          ...problemResponses('validation-failed', 'unauthorized'),
         },
       }),
       async (c) => {
@@ -161,8 +160,8 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
-          200: { description: 'The note', ...jsonContent(noteSchema) },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          200: { description: 'The note', headers: headerRefs('ETag'), ...jsonContent(noteSchema) },
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {
@@ -190,15 +189,17 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
           body: { ...jsonContent(updateNoteSchema), required: true },
         },
         responses: {
-          200: { description: 'The updated note', ...jsonContent(noteSchema) },
+          200: {
+            description: 'The updated note',
+            headers: headerRefs('ETag'),
+            ...jsonContent(noteSchema),
+          },
           ...problemResponses(
             'validation-failed',
             'unauthorized',
             'not-found',
             'version-mismatch',
             'precondition-required',
-            'unsupported-media-type',
-            'rate-limited',
           ),
         },
       }),
@@ -240,7 +241,7 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
         request: { params: idParams },
         responses: {
           204: { description: 'Note deleted' },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {

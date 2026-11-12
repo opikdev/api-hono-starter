@@ -319,6 +319,7 @@ export function renderRoutes(spec: FeatureSpec): string {
   return `import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
 import { idempotencyScope, withIdempotency } from '../../platform/idempotency.ts';
+import { headerRefs } from '../../platform/openapi.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -422,13 +423,15 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           body: { ...jsonContent(create${Singular}Schema), required: true },
         },
         responses: {
-          201: { description: '${Singular} created', ...jsonContent(${singular}Schema) },
+          201: {
+            description: '${Singular} created',
+            headers: headerRefs('ETag', 'Location', 'Idempotency-Replayed'),
+            ...jsonContent(${singular}Schema),
+          },
           ...problemResponses(
             'validation-failed',
             'unauthorized',${conflict}
             'idempotency-key-reused',
-            'unsupported-media-type',
-            'rate-limited',
           ),
         },
       }),
@@ -463,7 +466,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         request: { query: listQuery },
         responses: {
           200: { description: 'A page of ${label}', ...jsonContent(${singular}ListSchema) },
-          ...problemResponses('validation-failed', 'unauthorized', 'rate-limited'),
+          ...problemResponses('validation-failed', 'unauthorized'),
         },
       }),
       async (c) => {
@@ -484,8 +487,12 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
-          200: { description: 'The ${singularLabel.trim()}', ...jsonContent(${singular}Schema) },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          200: {
+            description: 'The ${singularLabel.trim()}',
+            headers: headerRefs('ETag'),
+            ...jsonContent(${singular}Schema),
+          },
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {
@@ -513,15 +520,17 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           body: { ...jsonContent(update${Singular}Schema), required: true },
         },
         responses: {
-          200: { description: 'The updated ${singularLabel.trim()}', ...jsonContent(${singular}Schema) },
+          200: {
+            description: 'The updated ${singularLabel.trim()}',
+            headers: headerRefs('ETag'),
+            ...jsonContent(${singular}Schema),
+          },
           ...problemResponses(
             'validation-failed',
             'unauthorized',
             'not-found',${conflict}
             'version-mismatch',
             'precondition-required',
-            'unsupported-media-type',
-            'rate-limited',
           ),
         },
       }),
@@ -558,7 +567,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         request: { params: idParams },
         responses: {
           204: { description: '${Singular} deleted' },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {

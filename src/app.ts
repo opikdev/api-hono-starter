@@ -14,6 +14,7 @@ import { mountApiDocs } from './platform/api-docs.ts';
 import { crossOriginProtection } from './platform/cross-origin.ts';
 import { createErrorHandler, respond } from './platform/error-handler.ts';
 import type { Logger } from './platform/logger.ts';
+import { describeApi } from './platform/openapi.ts';
 import { ProblemError, type ProblemResponses } from './platform/problem.ts';
 import { project } from './platform/project.ts';
 import { loginFailureLimit, rateLimit } from './platform/rate-limit.ts';
@@ -134,10 +135,8 @@ export function createApp({
     name: '__Host-session',
   });
   if (config.DOCS_ENABLED) {
-    app.doc31('/openapi.json', {
-      openapi: '3.1.0',
-      info: { title: project.name, version: project.version },
-    });
+    const document = describeApi(app, { title: project.name, version: project.version });
+    app.get('/openapi.json', (c) => c.json(document));
     mountApiDocs(app, project.name);
   }
 

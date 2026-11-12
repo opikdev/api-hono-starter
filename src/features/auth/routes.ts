@@ -117,12 +117,7 @@ export function createAuthRouter({
             description: 'User created',
             content: { 'application/json': { schema: userSchema } },
           },
-          ...problemResponses(
-            'validation-failed',
-            'email-taken',
-            'unsupported-media-type',
-            'rate-limited',
-          ),
+          ...problemResponses('validation-failed', 'email-taken'),
         },
       }),
       async (c) => {
@@ -150,12 +145,7 @@ export function createAuthRouter({
             headers: sessionCookieHeader,
             content: { 'application/json': { schema: sessionSchema } },
           },
-          ...problemResponses(
-            'validation-failed',
-            'invalid-credentials',
-            'unsupported-media-type',
-            'rate-limited',
-          ),
+          ...problemResponses('validation-failed', 'invalid-credentials'),
         },
       }),
       async (c) => {
@@ -194,7 +184,7 @@ export function createAuthRouter({
         middleware: [requireAuth],
         responses: {
           204: { description: 'Session revoked', headers: clearedCookieHeader },
-          ...problemResponses('unauthorized', 'rate-limited'),
+          ...problemResponses('unauthorized'),
         },
       }),
       async (c) => {
@@ -217,7 +207,7 @@ export function createAuthRouter({
             description: 'Current user',
             content: { 'application/json': { schema: userSchema } },
           },
-          ...problemResponses('unauthorized', 'rate-limited'),
+          ...problemResponses('unauthorized'),
         },
       }),
       (c) => c.json(presentUser(c.get('user')), 200),

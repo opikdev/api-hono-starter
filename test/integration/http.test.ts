@@ -217,19 +217,40 @@ describe('logging', () => {
 });
 
 describe('OpenAPI', () => {
-  const spec = async () => {
-    const response = await call(app, 'GET', '/openapi.json');
-    return (await response.json()) as {
-      openapi: string;
-      paths: Record<string, Record<string, Operation>>;
-    };
-  };
+  interface Response {
+    $ref?: string;
+    content?: Record<string, unknown>;
+    headers?: Record<string, unknown>;
+  }
 
   interface Operation {
     operationId?: string;
     summary?: string;
     security?: unknown[];
-    responses: Record<string, { content?: Record<string, unknown> }>;
+    requestBody?: unknown;
+    responses: Record<string, Response>;
+  }
+
+  interface Document {
+    openapi: string;
+    paths: Record<string, Record<string, Operation>>;
+    components: { responses: Record<string, Response>; headers: Record<string, unknown> };
+  }
+
+  const spec = async () => {
+    const response = await call(app, 'GET', '/openapi.json');
+    return (await response.json()) as Document;
+  };
+
+  function operationsOf(document: Document) {
+    return Object.entries(document.paths).flatMap(([path, methods]) =>
+      Object.entries(methods).map(([method, operation]) => ({ path, method, operation })),
+    );
+  }
+
+  function resolve(document: Document, response: Response): Response {
+    const name = response.$ref?.replace('#/components/responses/', '');
+    return name ? (document.components.responses[name] as Response) : response;
   }
 
   const publicOperations = ['createUser', 'createSession'];
@@ -244,32 +265,65 @@ describe('OpenAPI', () => {
   });
 
   it('documents every operation fully', async () => {
-    const { paths } = await spec();
-    const operations = Object.entries(paths).flatMap(([path, methods]) =>
-      Object.values(methods).map((operation) => ({ path, operation })),
-    );
+    const operations = operationsOf(await spec());
     expect(operations.length).toBeGreaterThan(8);
 
     for (const { path, operation } of operations) {
       expect(operation.operationId, path).toBeTruthy();
       expect(operation.summary, path).toBeTruthy();
-      if (!path.startsWith('/v1')) continue;
-
-      expect(operation.responses['429'], `${path} documents 429`).toBeDefined();
-      if (!publicOperations.includes(operation.operationId as string)) {
-        expect(operation.security, `${path} declares auth`).toEqual([
-          { bearerAuth: [] },
-          { cookieAuth: [] },
-        ]);
-        expect(operation.responses['401'], `${path} documents 401`).toBeDefined();
+      if (!path.startsWith('/v1') || publicOperations.includes(operation.operationId as string)) {
+        continue;
       }
-      for (const [status, response] of Object.entries(operation.responses)) {
+      expect(operation.security, `${path} declares auth`).toEqual([
+        { bearerAuth: [] },
+        { cookieAuth: [] },
+      ]);
+      expect(operation.responses['401'], `${path} documents 401`).toBeDefined();
+    }
+  });
+
+  it('documents every status the middleware can return', async () => {
+    const document = await spec();
+    for (const { path, method, operation } of operationsOf(document)) {
+      const label = `${method.toUpperCase()} ${path}`;
+      const expected = ['500'];
+      if (path.startsWith('/v1/')) expected.push('429');
+      if (path.startsWith('/v1/') && ['post', 'put', 'patch', 'delete'].includes(method)) {
+        expected.push('403');
+      }
+      if (operation.requestBody) expected.push('413', '415');
+      expect(Object.keys(operation.responses), label).toEqual(expect.arrayContaining(expected));
+
+      for (const [status, reference] of Object.entries(operation.responses)) {
+        const response = resolve(document, reference);
+        expect(response, `${label} ${status} resolves`).toBeDefined();
+        const headers = Object.keys(response.headers ?? {});
+        expect(headers, `${label} ${status}`).toContain('X-Request-Id');
+        if (path.startsWith('/v1/')) {
+          expect(headers, `${label} ${status}`).toEqual(
+            expect.arrayContaining(['RateLimit', 'RateLimit-Policy', 'Cache-Control']),
+          );
+        }
         if (Number(status) >= 400) {
-          expect(response.content, `${path} ${status}`).toHaveProperty([
+          expect(response.content, `${label} ${status}`).toHaveProperty([
             'application/problem+json',
           ]);
         }
+        if (status === '429') expect(headers, label).toContain('Retry-After');
+        if (status === '201' && path === '/v1/notes') {
+          expect(headers, label).toEqual(expect.arrayContaining(['Location', 'ETag']));
+        }
       }
+    }
+  });
+
+  it('never documents a framework validation 422', async () => {
+    const document = await spec();
+    for (const { path, operation } of operationsOf(document)) {
+      const response = operation.responses['422'];
+      if (!response) continue;
+      expect(response.$ref, path).toBe('#/components/responses/UnprocessableContent');
+      expect(path, 'only idempotent creates return 422').toMatch(/^\/v1\/[a-z-]+$/);
     }
   });
 
