@@ -11,6 +11,26 @@ describe('loadConfig', () => {
     expect(config.CORS_ORIGINS).toEqual([]);
     expect(config.AUTH_RATE_LIMIT_PER_MINUTE).toBe(10);
     expect(config.DATABASE_POOL_MAX).toBe(10);
+    expect(config.LOGIN_FAILURE_LIMIT).toBe(5);
+    expect(config.LOGIN_FAILURE_WINDOW_SECONDS).toBe(900);
+    expect(config.SHUTDOWN_DRAIN_SECONDS).toBe(5);
+    expect(config.SHUTDOWN_TIMEOUT_SECONDS).toBe(30);
+  });
+
+  it('allows a drain of 0 seconds', () => {
+    expect(
+      loadConfig({ DATABASE_URL: databaseUrl, SHUTDOWN_DRAIN_SECONDS: '0' }).SHUTDOWN_DRAIN_SECONDS,
+    ).toBe(0);
+  });
+
+  it('rejects a shutdown timeout shorter than the statement timeout', () => {
+    expect(() =>
+      loadConfig({
+        DATABASE_URL: databaseUrl,
+        DATABASE_STATEMENT_TIMEOUT_MS: '10000',
+        SHUTDOWN_TIMEOUT_SECONDS: '5',
+      }),
+    ).toThrow(/SHUTDOWN_TIMEOUT_SECONDS: Must be at least DATABASE_STATEMENT_TIMEOUT_MS/);
   });
 
   it('parses the pool size', () => {

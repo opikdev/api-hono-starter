@@ -17,6 +17,7 @@ import type { Logger } from './platform/logger.ts';
 import { ProblemError, type ProblemResponses } from './platform/problem.ts';
 import { loginFailureLimit, rateLimit } from './platform/rate-limit.ts';
 import { createRouter } from './platform/router.ts';
+import type { Readiness } from './platform/shutdown.ts';
 
 const maxBodyBytes = 100 * 1024;
 
@@ -34,9 +35,15 @@ interface AppDependencies {
   config: Config;
   db: Db;
   logger: Logger;
+  readiness?: Readiness;
 }
 
-export function createApp({ config, db, logger }: AppDependencies) {
+export function createApp({
+  config,
+  db,
+  logger,
+  readiness = { draining: false },
+}: AppDependencies) {
   const app = createRouter();
   const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
@@ -92,7 +99,7 @@ export function createApp({ config, db, logger }: AppDependencies) {
   const requireAuth = createRequireAuth(db);
 
   const routes = app
-    .route('/', createHealthRouter(db))
+    .route('/', createHealthRouter(db, readiness))
     .route(
       '/v1',
       createAuthRouter({

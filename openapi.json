@@ -316,7 +316,7 @@
     "/readyz": {
       "get": {
         "operationId": "getReadiness",
-        "summary": "Check that the API can reach Postgres",
+        "summary": "Check that the API can reach Postgres and is not shutting down",
         "tags": [
           "Health"
         ],

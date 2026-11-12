@@ -1,28 +1,35 @@
 import { z } from 'zod';
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
-  DATABASE_URL: z.url(),
-  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
-  CORS_ORIGINS: z
-    .string()
-    .default('')
-    .transform((value) =>
-      value
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean),
-    ),
-  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
-  SESSION_TTL_HOURS: z.coerce.number().int().positive().max(9600).default(168),
-  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
-  AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
-  LOGIN_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
-  LOGIN_FAILURE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
+    DATABASE_URL: z.url(),
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    CORS_ORIGINS: z
+      .string()
+      .default('')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+      ),
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+    SESSION_TTL_HOURS: z.coerce.number().int().positive().max(9600).default(168),
+    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+    AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+    LOGIN_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
+    LOGIN_FAILURE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    SHUTDOWN_DRAIN_SECONDS: z.coerce.number().int().min(0).default(5),
+    SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(30),
+  })
+  .refine((env) => env.SHUTDOWN_TIMEOUT_SECONDS * 1000 >= env.DATABASE_STATEMENT_TIMEOUT_MS, {
+    path: ['SHUTDOWN_TIMEOUT_SECONDS'],
+    message: 'Must be at least DATABASE_STATEMENT_TIMEOUT_MS, so requests in flight can finish',
+  });
 
 export type Config = z.infer<typeof envSchema>;
 
