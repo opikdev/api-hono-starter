@@ -22,7 +22,7 @@ A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with au
 | Run all gates                   | `pnpm verify`                                          |
 | Test against real Docker images | `pnpm test:e2e`                                        |
 | Generate a CRUD feature | `pnpm gen:feature <name> <field:type> ... --yes --json` |
-| Create a migration              | `pnpm db:generate`                                     |
+| Create a migration              | `pnpm db:generate --name <what_it_does>`               |
 | Regenerate the API contract     | `pnpm openapi:generate`                                |
 
 ## Rules
@@ -32,7 +32,7 @@ A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with au
 - If the check blocks you, fix the cause. Never edit `.agents/check.sh`, `.githooks/`, or the harness workflow to get past it, and never use `--no-verify`. If the request can't be done without that, stop and ask.
 - After cloning, run `git config core.hooksPath .githooks` once to turn on the hook. It runs `.agents/check.sh` only, not lint or tests, so still run `pnpm verify`.
 - Start every new resource with `pnpm gen:feature`, then add business logic to the generated files. Run `pnpm gen:feature --help` for field types.
-- Change the database by editing `src/db/schema.ts`, then running `pnpm db:generate`. Migrations are append-only, so never edit one that's committed.
+- Change the database by editing `src/db/schema.ts`, then running `pnpm db:generate --name <what_it_does>`. Migrations are append-only, so never edit one that's committed.
 - When an endpoint changes, run `pnpm openapi:generate` and commit `openapi.json` in the same change.
 - Chain each route with `.openapi()` on the router, and return `c.json()` with an explicit status, so it stays in `AppType`.
 - Throw `ProblemError` for every failure, and add new types to `src/platform/problem.ts` and `docs/errors.md`.

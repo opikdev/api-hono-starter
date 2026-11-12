@@ -71,7 +71,7 @@ pnpm dev
 | Test the real image end to end                            | `pnpm test:e2e`         |
 | Generate a CRUD feature, with prompts | `pnpm gen:feature` |
 | Generate a CRUD feature in one line | `pnpm gen:feature projects name:string dueAt:datetime:optional` |
-| Create a migration after editing `src/db/schema.ts`       | `pnpm db:generate`      |
+| Create a migration after editing `src/db/schema.ts`       | `pnpm db:generate --name <what_it_does>` |
 | Update `openapi.json` after changing a route              | `pnpm openapi:generate` |
 
 Tests start their own Postgres, so Docker must be running. Without Docker, point them at a Postgres 18 server instead:

@@ -23,6 +23,15 @@ async function withClient<T>(url: string, use: (client: pg.Client) => Promise<T>
   }
 }
 
+async function columns(url: string) {
+  const { rows } = await withClient(url, (client) =>
+    client.query(
+      "select table_name, column_name, data_type from information_schema.columns where table_schema = 'public' order by table_name, column_name",
+    ),
+  );
+  return rows;
+}
+
 describe('migration runner', () => {
   it('gives up on a held lock instead of queueing behind it', async () => {
     const ownerUrl = inject('ownerDatabaseUrl');
@@ -49,20 +58,11 @@ describe('migration runner', () => {
       expect(outcomes.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled']);
 
       const migrations = readdirSync('migrations').filter((file) => file.endsWith('.sql'));
-      await withClient(url.toString(), async (client) => {
-        const applied = await client.query('select hash from drizzle.__drizzle_migrations');
-        expect(applied.rowCount).toBe(migrations.length);
-        const tables = await client.query<{ table_name: string }>(
-          "select table_name from information_schema.tables where table_schema = 'public' order by table_name",
-        );
-        expect(tables.rows.map((row) => row.table_name)).toEqual([
-          'idempotency_keys',
-          'notes',
-          'rate_limits',
-          'sessions',
-          'users',
-        ]);
-      });
+      const applied = await withClient(url.toString(), (client) =>
+        client.query('select hash from drizzle.__drizzle_migrations'),
+      );
+      expect(applied.rowCount).toBe(migrations.length);
+      expect(await columns(url.toString())).toEqual(await columns(ownerUrl));
     } finally {
       await withClient(ownerUrl, (client) =>
         client.query(`drop database if exists ${name} with (force)`),

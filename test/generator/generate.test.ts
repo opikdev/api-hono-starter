@@ -102,9 +102,11 @@ describe('pnpm gen:feature', () => {
       'description:text',
       'minutes:int',
       'billable:boolean',
-      'startedAt:datetime',
+      'startedAt:datetime:unique',
       'label:string:optional',
       'kind:enum:work,break:optional',
+      'code:string:unique',
+      'position:int:optional:unique',
     );
     expect(second.body.output ?? '').toBe('');
     expect(second.body).toMatchObject({ ok: true, verify: 'passed' });
@@ -112,6 +114,12 @@ describe('pnpm gen:feature', () => {
       expect.stringMatching(/^migrations\/\d{4}_add_time_entries\.sql$/),
     );
     expect(readFileSync(join(repo, 'openapi.json'), 'utf8')).toContain('/v1/time-entries/{id}');
+    expect(readFileSync(join(repo, 'src/db/schema.ts'), 'utf8')).toContain(
+      "unique('uq_time_entries_user_id_code').on(table.userId, table.code),",
+    );
+    expect(readFileSync(join(repo, 'test/integration/time-entries.test.ts'), 'utf8')).toContain(
+      "await expectProblem(response, 409, 'conflict');",
+    );
   });
 
   it('refuses to generate a feature twice', () => {

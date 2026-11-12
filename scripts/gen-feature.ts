@@ -9,17 +9,21 @@ import {
   buildSpec,
   type FeatureSpec,
   type Field,
+  type FieldType,
   fieldTypes,
   parseField,
   SpecError,
   singularize,
+  uniqueFieldTypes,
 } from './gen-feature/spec.ts';
 
-const usage = `Usage: pnpm gen:feature [name] [field:type[:optional] ...] [options]
+const usage = `Usage: pnpm gen:feature [name] [field:type[:optional][:unique] ...] [options]
 
 Run with no arguments to answer prompts instead.
 
 Field types: ${fieldTypes.join(', ')}. Enums list values: status:enum:active,archived.
+Add :optional to allow null, and :unique to reject a value the same user already used
+(${uniqueFieldTypes.join(', ')} only), such as slug:string:unique.
 
 Options:
   --singular <name>  Singular name, when it isn't the name without its final s
@@ -32,7 +36,7 @@ Options:
   -h, --help         Show this help
 
 Example:
-  pnpm gen:feature projects name:string status:enum:active,archived dueAt:datetime:optional`;
+  pnpm gen:feature projects name:string:unique status:enum:active,archived dueAt:datetime:optional`;
 
 const { values: options, positionals } = parseArgs({
   allowPositionals: true,
@@ -124,9 +128,21 @@ async function askForSpec(): Promise<FeatureSpec> {
     });
     cancelled(required);
 
+    let unique = false;
+    if (uniqueFieldTypes.includes(type as FieldType)) {
+      const answer = await prompts.confirm({
+        message: `Must each user's ${fieldLabel} be unique?`,
+        initialValue: false,
+      });
+      cancelled(answer);
+      unique = answer === true;
+    }
+
     try {
       fields.push(
-        parseField(`${fieldLabel}:${String(type)}${enumValues}${required ? '' : ':optional'}`),
+        parseField(
+          `${fieldLabel}:${String(type)}${enumValues}${required ? '' : ':optional'}${unique ? ':unique' : ''}`,
+        ),
       );
     } catch (error) {
       prompts.log.warn(error instanceof Error ? error.message : String(error));
@@ -241,7 +257,7 @@ async function main() {
         ...summary.changed.map((path) => `~ ${path}`),
         '+ a new migration',
       ].join('\n'),
-      `${spec.name}: ${spec.fields.map((field) => `${field.name} (${field.type}${field.optional ? ', optional' : ''})`).join(', ')}`,
+      `${spec.name}: ${spec.fields.map((field) => `${field.name} (${field.type}${field.optional ? ', optional' : ''}${field.unique ? ', unique' : ''})`).join(', ')}`,
     );
   }
 
