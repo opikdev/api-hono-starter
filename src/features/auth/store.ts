@@ -21,6 +21,10 @@ export async function findUserByEmail(db: Db, email: string) {
   return user ?? null;
 }
 
+export async function updatePasswordHash(db: Db, userId: string, passwordHash: string) {
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+}
+
 export async function createSession(db: Db, userId: string, ttlHours: number) {
   const token = randomBytes(32).toString('base64url');
   const [session] = await db

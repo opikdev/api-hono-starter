@@ -8,7 +8,13 @@ import { createRouter } from '../../platform/router.ts';
 import { clearSessionCookie, setSessionCookie } from './cookie.ts';
 import type { RequireAuth } from './middleware.ts';
 import { hashPassword, verifyPassword } from './password.ts';
-import { createSession, createUser, deleteSession, findUserByEmail } from './store.ts';
+import {
+  createSession,
+  createUser,
+  deleteSession,
+  findUserByEmail,
+  updatePasswordHash,
+} from './store.ts';
 
 const unknownUserPasswordHash = await hashPassword('timing-equalizer');
 
@@ -153,13 +159,14 @@ export function createAuthRouter({
       async (c) => {
         const { email, password, delivery } = c.req.valid('json');
         const user = await findUserByEmail(db, email);
-        const matches = await verifyPassword(
+        const { valid, needsRehash } = await verifyPassword(
           password,
           user?.passwordHash ?? unknownUserPasswordHash,
         );
-        if (!user || !matches) {
+        if (!user || !valid) {
           throw new ProblemError('invalid-credentials', 'The email or password is wrong.');
         }
+        if (needsRehash) await updatePasswordHash(db, user.id, await hashPassword(password));
 
         const session = await createSession(db, user.id, sessionTtlHours);
         const expiresAt = session.expiresAt.toISOString();
