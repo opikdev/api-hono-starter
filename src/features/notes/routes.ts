@@ -1,6 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
-import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
+import { idempotencyScope, withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -116,9 +116,8 @@ export function createNotesRouter({ db, requireAuth }: NotesRouterOptions) {
           db,
           {
             userId,
-            endpoint: endpointOf(c),
             key: c.req.valid('header')['idempotency-key'],
-            payload: input,
+            ...idempotencyScope(c, input),
           },
           async (tx) => presentNote(await insertNote(tx, userId, input)),
         );

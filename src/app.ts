@@ -20,6 +20,7 @@ import { createRouter } from './platform/router.ts';
 import type { Readiness } from './platform/shutdown.ts';
 
 const maxBodyBytes = 100 * 1024;
+const apiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
 
 const corsExposedHeaders = [
   'ETag',
@@ -64,9 +65,19 @@ export function createApp({
     );
   });
   app.use(secureHeaders());
+  app.use(async (c, next) => {
+    await next();
+    if (!c.res.headers.has('Content-Security-Policy')) {
+      c.header('Content-Security-Policy', apiContentSecurityPolicy);
+    }
+  });
   if (config.CORS_ORIGINS.length > 0) {
     app.use('/v1/*', cors({ origin: config.CORS_ORIGINS, exposeHeaders: corsExposedHeaders }));
   }
+  app.use('/v1/*', async (c, next) => {
+    await next();
+    c.header('Cache-Control', 'no-store');
+  });
   app.use('/v1/*', crossOriginProtection(config.CORS_ORIGINS));
   app.use(
     '/v1/*',

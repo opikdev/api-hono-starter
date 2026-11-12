@@ -76,6 +76,32 @@ describe('security headers', () => {
     expect(response.headers.get('x-powered-by')).toBeNull();
   });
 
+  it.each(['/healthz', '/v1/notes', '/v1/nope', '/openapi.json'])(
+    'locks down the content security policy on %s',
+    async (path) => {
+      const response = await call(app, 'GET', path);
+      expect(response.headers.get('content-security-policy')).toBe(
+        "default-src 'none'; frame-ancestors 'none'",
+      );
+    },
+  );
+
+  it.each([
+    ['a success', 'GET', '/v1/users/me', true],
+    ['an auth failure', 'GET', '/v1/notes', false],
+    ['an unknown route', 'GET', '/v1/nope', false],
+    ['a blocked cross-site write', 'POST', '/v1/notes', false],
+  ] as const)('forbids caching %s on /v1', async (_label, method, path, signedIn) => {
+    const token = signedIn ? (await signUp(app)).token : undefined;
+    const response = await call(app, method, path, {
+      ...(token ? { token } : {}),
+      ...(method === 'POST'
+        ? { body: {}, headers: { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' } }
+        : {}),
+    });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('returns a request id', async () => {
     const response = await call(app, 'GET', '/healthz');
     expect(response.headers.get('x-request-id')).toBeTruthy();

@@ -15,13 +15,16 @@ Every error is `application/problem+json` per [RFC 9457](https://www.rfc-editor.
 }
 ```
 
+Each `errors` entry names the invalid input in `field`, as a dot-separated path such as `password` or `limit`. An empty `field` means the problem is with the whole body, such as an empty `PATCH`.
+
 | Type                                 | Status | Meaning                                                           |
 | ------------------------------------ | ------ | ----------------------------------------------------------------- |
-| `urn:problem:validation-failed`      | 400    | A field is invalid, the JSON is malformed, or `limit` is over 100 |
+| `urn:problem:validation-failed`      | 400    | A field is invalid, the JSON is malformed, or `limit` is over 100. A value the database's check constraints reject returns it with status 422 |
 | `urn:problem:invalid-credentials`    | 401    | Wrong email or password                                           |
 | `urn:problem:unauthorized`           | 401    | The token or session cookie is missing, invalid, expired, or revoked |
 | `urn:problem:forbidden`              | 403    | A request that changes data came from another site whose origin isn't in `CORS_ORIGINS` |
 | `urn:problem:not-found`              | 404    | The route or resource doesn't exist, or isn't yours               |
+| `urn:problem:conflict`               | 409    | The request clashes with existing data, such as a value that must be unique, or refers to data that doesn't exist |
 | `urn:problem:email-taken`            | 409    | The email is already registered                                   |
 | `urn:problem:version-mismatch`       | 412    | `If-Match` doesn't match the note's current version               |
 | `urn:problem:payload-too-large`      | 413    | The body is over 100 KiB                                          |
@@ -34,3 +37,5 @@ Every error is `application/problem+json` per [RFC 9457](https://www.rfc-editor.
 | `urn:problem:timeout`                | 504    | Middleware you add, such as `hono/timeout`, stopped the request   |
 
 An `HTTPException` thrown by Hono or its middleware becomes the type with the same status. One with a status not listed here becomes `internal-error`, and it's logged.
+
+A Postgres constraint violation that reaches the error handler becomes a problem without the constraint name or SQL: a unique or foreign key violation is `conflict`, and a check violation is `validation-failed` with status 422. Other database errors are `internal-error`.

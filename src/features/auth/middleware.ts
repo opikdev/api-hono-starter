@@ -5,7 +5,7 @@ import type { AppEnv } from '../../platform/router.ts';
 import { clearedSessionCookie, readSessionCookie } from './cookie.ts';
 import { findActiveSession } from './store.ts';
 
-const bearerPrefix = 'Bearer ';
+const bearerScheme = /^bearer +(\S+)$/i;
 
 function unauthorized(clearCookie: boolean): ProblemError {
   return new ProblemError(
@@ -24,7 +24,7 @@ export function createRequireAuth(db: Db) {
   return createMiddleware<AppEnv>(async (c, next) => {
     const header = c.req.header('authorization');
     const cookie = header === undefined ? readSessionCookie(c) : undefined;
-    const token = header?.startsWith(bearerPrefix) ? header.slice(bearerPrefix.length) : cookie;
+    const token = header === undefined ? cookie : bearerScheme.exec(header)?.[1];
 
     const session = token ? await findActiveSession(db, token) : null;
     if (!session) throw unauthorized(cookie !== undefined);

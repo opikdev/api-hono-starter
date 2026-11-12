@@ -6,6 +6,7 @@ export const problemCatalog = {
   unauthorized: { status: 401, title: 'Authentication required' },
   forbidden: { status: 403, title: 'Forbidden' },
   'not-found': { status: 404, title: 'Resource not found' },
+  conflict: { status: 409, title: 'Conflict' },
   'email-taken': { status: 409, title: 'Email already registered' },
   'version-mismatch': { status: 412, title: 'Resource version mismatch' },
   'payload-too-large': { status: 413, title: 'Payload too large' },
@@ -68,6 +69,7 @@ interface ProblemOptions {
   errors?: FieldError[];
   headers?: Record<string, string>;
   cause?: unknown;
+  status?: ProblemStatus;
 }
 
 export class ProblemError extends Error {
@@ -80,7 +82,7 @@ export class ProblemError extends Error {
   constructor(slug: ProblemSlug, detail: string, options: ProblemOptions = {}) {
     super(detail, { cause: options.cause });
     this.slug = slug;
-    this.status = problemCatalog[slug].status;
+    this.status = options.status ?? problemCatalog[slug].status;
     this.title = problemCatalog[slug].title;
     this.errors = options.errors;
     this.headers = options.headers ?? {};

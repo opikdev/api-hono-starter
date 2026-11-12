@@ -228,10 +228,19 @@ describe('authentication', () => {
     expect(await response.json()).toMatchObject({ id: userId, email });
   });
 
+  it.each(['bearer', 'BEARER', 'Bearer'])('accepts the scheme written as %s', async (scheme) => {
+    const { token } = await signUp(app);
+    const response = await call(app, 'GET', '/v1/users/me', {
+      headers: { Authorization: `${scheme} ${token}` },
+    });
+    expect(response.status).toBe(200);
+  });
+
   it.each([
     ['no token', {}],
     ['a wrong token', { token: 'not-a-real-token' }],
     ['the wrong scheme', { headers: { Authorization: 'Basic abc' } }],
+    ['a scheme with no token', { headers: { Authorization: 'Bearer ' } }],
   ])('rejects %s', async (_label, options) => {
     const response = await call(app, 'GET', '/v1/users/me', options);
     const problem = await expectProblem(response, 401, 'unauthorized');

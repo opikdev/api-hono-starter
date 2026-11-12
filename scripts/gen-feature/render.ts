@@ -272,7 +272,7 @@ export function renderRoutes(spec: FeatureSpec): string {
 
   return `import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
-import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
+import { idempotencyScope, withIdempotency } from '../../platform/idempotency.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -393,9 +393,8 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           db,
           {
             userId,
-            endpoint: endpointOf(c),
             key: c.req.valid('header')['idempotency-key'],
-            payload: input,
+            ...idempotencyScope(c, input),
           },
           async (tx) => present${Singular}(await insert${Singular}(tx, userId, toValues(input))),
         );

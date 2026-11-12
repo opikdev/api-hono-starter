@@ -20,7 +20,7 @@ export interface AppEnv {
 
 function toValidationProblem(error: ZodError): ProblemError {
   const errors = error.issues.map((issue) => ({
-    field: issue.path.join('.') || 'body',
+    field: issue.path.join('.'),
     detail: issue.message,
   }));
   return new ProblemError(

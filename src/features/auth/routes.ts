@@ -176,7 +176,6 @@ export function createAuthRouter({
 
         const session = await createSession(db, user.id, sessionTtlHours);
         const expiresAt = session.expiresAt.toISOString();
-        c.header('Cache-Control', 'no-store');
         if (delivery === 'cookie') {
           setSessionCookie(c, session.token, sessionTtlHours * 3600);
           return c.json({ expiresAt }, 201);
