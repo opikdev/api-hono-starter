@@ -27,7 +27,12 @@ pnpm gen:feature projects name:string status:enum:active,archived dueAt:datetime
 | `datetime` | `timestamptz` | An ISO 8601 UTC timestamp |
 | `enum:a,b` | `text` with a check | One of the listed values |
 
-Add `:optional` to a field to make it nullable. Optional fields are `null` when omitted.
+| Modifier | Does |
+|---|---|
+| `:optional` | Makes the field nullable. It's `null` when omitted |
+| `:unique` | Rejects a value the same user already used, with 409 `conflict`. Adds a unique constraint on the user ID and the field. For `string`, `int`, and `datetime` only. Two `null`s don't clash |
+
+Write modifiers in any order, such as `slug:string:unique` or `code:string:optional:unique`.
 
 | Flag | Does |
 |---|---|
@@ -43,6 +48,49 @@ Add `:optional` to a field to make it nullable. Optional fields are `null` when 
 The generator writes the table, store, routes, and tests, and mounts the router. It then creates the migration, updates `openapi.json`, and runs `pnpm verify`. If anything fails, it rolls every change back. Add business logic to the generated files afterward.
 
 Start every new resource this way, even one that needs custom logic, so it gets the same contract, tests, and migration. `src/features/notes/` has the same layout, so read it for examples of business logic.
+
+## Change the schema by hand
+
+Edit `src/db/schema.ts`, then generate a migration with a name that says what it does:
+
+```sh
+pnpm db:generate --name add_projects_slug
+```
+
+Without `--name`, drizzle-kit picks a random one.
+
+### Add a join table
+
+Give a join table its own `id` and timestamps, like every other table, and make the pair unique. The schema tests require `id`, `created_at`, and `updated_at` on every table, so a composite primary key fails them. This keeps every row addressable by one opaque ID, such as for a `DELETE /v1/project-members/{id}` route.
+
+```ts
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    id,
+    projectId: uuid('project_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ name: 'pk_project_members', columns: [table.id] }),
+    foreignKey({
+      name: 'fk_project_members_project_id',
+      columns: [table.projectId],
+      foreignColumns: [projects.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'fk_project_members_user_id',
+      columns: [table.userId],
+      foreignColumns: [users.id],
+    }).onDelete('cascade'),
+    unique('uq_project_members_project_id_user_id').on(table.projectId, table.userId),
+    index('idx_project_members_user_id').on(table.userId),
+  ],
+);
+```
+
+The unique constraint also indexes `project_id`, and `idx_project_members_user_id` covers the other foreign key, which the schema tests also require. A duplicate pair that reaches the database returns 409 `conflict`.
 
 ## Remove the notes feature
 

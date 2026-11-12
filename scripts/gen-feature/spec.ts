@@ -1,11 +1,13 @@
 export const fieldTypes = ['string', 'text', 'int', 'boolean', 'datetime', 'enum'] as const;
 export type FieldType = (typeof fieldTypes)[number];
+export const uniqueFieldTypes: readonly FieldType[] = ['string', 'int', 'datetime'];
 
 export interface Field {
   name: string;
   column: string;
   type: FieldType;
   optional: boolean;
+  unique: boolean;
   values: string[];
 }
 
@@ -56,13 +58,17 @@ export function singularize(word: string): string {
 
 export function parseField(raw: string): Field {
   const parts = raw.split(':');
-  const optional = parts.at(-1) === 'optional';
-  if (optional) parts.pop();
+  const modifiers = new Set<string>();
+  while (parts.length > 2 && ['optional', 'unique'].includes(parts.at(-1) as string)) {
+    const modifier = parts.pop() as string;
+    if (modifiers.has(modifier)) throw new SpecError(`Field "${raw}" lists ${modifier} twice.`);
+    modifiers.add(modifier);
+  }
   const [name = '', type = '', values, ...rest] = parts;
 
   if (rest.length > 0 || !name || !type) {
     throw new SpecError(
-      `Invalid field "${raw}". Use name:type, name:type:optional, or name:enum:a,b, such as title:string.`,
+      `Invalid field "${raw}". Use name:type, then :optional or :unique if needed, or name:enum:a,b, such as title:string.`,
     );
   }
   if (!/^[a-z][a-zA-Z0-9]{0,29}$/.test(name)) {
@@ -83,12 +89,19 @@ export function parseField(raw: string): Field {
   if (fieldType !== 'enum' && values !== undefined) {
     throw new SpecError(`Only enum fields take values, but ${name} is ${fieldType}.`);
   }
+  const unique = modifiers.has('unique');
+  if (unique && !uniqueFieldTypes.includes(fieldType)) {
+    throw new SpecError(
+      `${name} can't be unique, because it's ${fieldType}. Use one of: ${uniqueFieldTypes.join(', ')}.`,
+    );
+  }
 
   return {
     name,
     column: toSnake(name),
     type: fieldType,
-    optional,
+    optional: modifiers.has('optional'),
+    unique,
     values: fieldType === 'enum' ? parseEnumValues(name, values) : [],
   };
 }
@@ -164,7 +177,9 @@ export function buildSpec({ name, fields, singular, prefix }: SpecInput): Featur
 
   const table = toSnake(plural);
   for (const field of fields) {
-    const constraint = `chk_${table}_${field.column}_values`;
+    const constraint = field.unique
+      ? `uq_${table}_user_id_${field.column}`
+      : `chk_${table}_${field.column}_values`;
     if (constraint.length > maxIdentifierLength) {
       throw new SpecError(
         `${name}.${field.name} makes a database name over 63 characters. Shorten one of them.`,

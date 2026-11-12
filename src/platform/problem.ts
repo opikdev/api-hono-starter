@@ -6,6 +6,7 @@ export const problemCatalog = {
   unauthorized: { status: 401, title: 'Authentication required' },
   forbidden: { status: 403, title: 'Forbidden' },
   'not-found': { status: 404, title: 'Resource not found' },
+  conflict: { status: 409, title: 'Conflict' },
   'email-taken': { status: 409, title: 'Email already registered' },
   'version-mismatch': { status: 412, title: 'Resource version mismatch' },
   'payload-too-large': { status: 413, title: 'Payload too large' },
@@ -46,22 +47,34 @@ export type Problem = z.infer<typeof problemSchema>;
 
 export type ProblemResponses = { [S in ProblemStatus]: { json: Problem } };
 
+export const problemResponseNames: Record<ProblemStatus, string> = {
+  400: 'BadRequest',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'NotFound',
+  409: 'Conflict',
+  412: 'PreconditionFailed',
+  413: 'ContentTooLarge',
+  415: 'UnsupportedMediaType',
+  422: 'UnprocessableContent',
+  428: 'PreconditionRequired',
+  429: 'TooManyRequests',
+  500: 'InternalServerError',
+  503: 'ServiceUnavailable',
+  504: 'GatewayTimeout',
+};
+
+export function problemResponseRef(status: ProblemStatus) {
+  return { $ref: `#/components/responses/${problemResponseNames[status]}` };
+}
+
 export function problemResponses(...slugs: ProblemSlug[]) {
-  const responses: Record<
-    number,
-    {
-      description: string;
-      content: { 'application/problem+json': { schema: typeof problemSchema } };
-    }
-  > = {};
-  for (const slug of slugs) {
-    const { status, title } = problemCatalog[slug];
-    responses[status] = {
-      description: title,
-      content: { 'application/problem+json': { schema: problemSchema } },
-    };
-  }
-  return responses;
+  return Object.fromEntries(
+    slugs.map((slug) => [
+      problemCatalog[slug].status,
+      problemResponseRef(problemCatalog[slug].status),
+    ]),
+  );
 }
 
 interface ProblemOptions {

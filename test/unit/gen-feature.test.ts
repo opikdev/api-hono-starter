@@ -17,9 +17,17 @@ describe('parseField', () => {
       column: 'due_at',
       type: 'datetime',
       optional: false,
+      unique: false,
       values: [],
     });
   });
+
+  it.each(['slug:string:unique:optional', 'slug:string:optional:unique'])(
+    'parses the modifiers of %s in any order',
+    (raw) => {
+      expect(parseField(raw)).toMatchObject({ optional: true, unique: true });
+    },
+  );
 
   it('parses optional fields and enum values', () => {
     expect(parseField('status:enum:active,archived:optional')).toMatchObject({
@@ -38,6 +46,10 @@ describe('parseField', () => {
     ['a duplicate enum value', 'kind:enum:a,a', 'twice'],
     ['values on a non-enum', 'name:string:x', 'Only enum fields take values'],
     ['extra parts', 'kind:enum:a:b:c', 'Invalid field'],
+    ['a repeated modifier', 'slug:string:unique:unique', 'lists unique twice'],
+    ['a unique text field', 'notes:text:unique', "can't be unique"],
+    ['a unique boolean', 'done:boolean:unique', "can't be unique"],
+    ['a unique enum', 'kind:enum:a,b:unique', "can't be unique"],
   ])('rejects %s', (_label, raw, message) => {
     expect(() => parseField(raw)).toThrow(message);
   });
@@ -124,6 +136,13 @@ describe('file edits', () => {
     expect(result).toMatch(/import \{[^}]*\bboolean\b[^}]*\} from 'drizzle-orm\/pg-core'/);
     expect(result).toContain('chk_projects_name_length');
     expect(() => editSchema(result, projects)).toThrow('already defines');
+  });
+
+  it('adds a per-user unique constraint for a unique field', () => {
+    const result = editSchema(schemaSource, spec('projects', ['slug:string:unique']));
+    expect(result).toMatch(/import \{[^}]*\bunique\b[^}]*\} from 'drizzle-orm\/pg-core'/);
+    expect(result).toContain("unique('uq_projects_user_id_slug').on(table.userId, table.slug),");
+    expect(editSchema(schemaSource, projects)).not.toContain('uq_projects');
   });
 
   it('adds the ID prefix', () => {

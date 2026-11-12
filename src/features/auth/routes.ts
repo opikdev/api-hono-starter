@@ -2,13 +2,19 @@ import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { toPublicId } from '../../platform/public-id.ts';
-import type { RateLimit } from '../../platform/rate-limit.ts';
+import type { LoginFailureLimit, RateLimit } from '../../platform/rate-limit.ts';
 import { sessionSecurity } from '../../platform/resource.ts';
 import { createRouter } from '../../platform/router.ts';
 import { clearSessionCookie, setSessionCookie } from './cookie.ts';
 import type { RequireAuth } from './middleware.ts';
 import { hashPassword, verifyPassword } from './password.ts';
-import { createSession, createUser, deleteSession, findUserByEmail } from './store.ts';
+import {
+  createSession,
+  createUser,
+  deleteSession,
+  findUserByEmail,
+  updatePasswordHash,
+} from './store.ts';
 
 const unknownUserPasswordHash = await hashPassword('timing-equalizer');
 
@@ -85,6 +91,7 @@ interface AuthRouterOptions {
   db: Db;
   requireAuth: RequireAuth;
   authRateLimit: RateLimit;
+  loginFailures: LoginFailureLimit;
   sessionTtlHours: number;
 }
 
@@ -92,6 +99,7 @@ export function createAuthRouter({
   db,
   requireAuth,
   authRateLimit,
+  loginFailures,
   sessionTtlHours,
 }: AuthRouterOptions) {
   return createRouter()
@@ -109,12 +117,7 @@ export function createAuthRouter({
             description: 'User created',
             content: { 'application/json': { schema: userSchema } },
           },
-          ...problemResponses(
-            'validation-failed',
-            'email-taken',
-            'unsupported-media-type',
-            'rate-limited',
-          ),
+          ...problemResponses('validation-failed', 'email-taken'),
         },
       }),
       async (c) => {
@@ -142,28 +145,27 @@ export function createAuthRouter({
             headers: sessionCookieHeader,
             content: { 'application/json': { schema: sessionSchema } },
           },
-          ...problemResponses(
-            'validation-failed',
-            'invalid-credentials',
-            'unsupported-media-type',
-            'rate-limited',
-          ),
+          ...problemResponses('validation-failed', 'invalid-credentials'),
         },
       }),
       async (c) => {
         const { email, password, delivery } = c.req.valid('json');
+        const attempt = await loginFailures(c, email);
         const user = await findUserByEmail(db, email);
-        const matches = await verifyPassword(
+        const stored = attempt.blocked ? undefined : user?.passwordHash;
+        const { valid, needsRehash } = await verifyPassword(
           password,
-          user?.passwordHash ?? unknownUserPasswordHash,
+          stored ?? unknownUserPasswordHash,
         );
-        if (!user || !matches) {
+        if (attempt.blocked) throw attempt.blocked;
+        if (!user || !valid) {
           throw new ProblemError('invalid-credentials', 'The email or password is wrong.');
         }
+        await attempt.succeeded();
+        if (needsRehash) await updatePasswordHash(db, user.id, await hashPassword(password));
 
         const session = await createSession(db, user.id, sessionTtlHours);
         const expiresAt = session.expiresAt.toISOString();
-        c.header('Cache-Control', 'no-store');
         if (delivery === 'cookie') {
           setSessionCookie(c, session.token, sessionTtlHours * 3600);
           return c.json({ expiresAt }, 201);
@@ -182,7 +184,7 @@ export function createAuthRouter({
         middleware: [requireAuth],
         responses: {
           204: { description: 'Session revoked', headers: clearedCookieHeader },
-          ...problemResponses('unauthorized', 'rate-limited'),
+          ...problemResponses('unauthorized'),
         },
       }),
       async (c) => {
@@ -205,7 +207,7 @@ export function createAuthRouter({
             description: 'Current user',
             content: { 'application/json': { schema: userSchema } },
           },
-          ...problemResponses('unauthorized', 'rate-limited'),
+          ...problemResponses('unauthorized'),
         },
       }),
       (c) => c.json(presentUser(c.get('user')), 200),

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { idempotencyKeys, notes } from '../../src/db/schema.ts';
-import { withIdempotency } from '../../src/platform/idempotency.ts';
+import { fingerprint, withIdempotency } from '../../src/platform/idempotency.ts';
 import { fromPublicId } from '../../src/platform/public-id.ts';
 import { call, db, expectProblem, signUp, testApp } from '../helpers.ts';
 
@@ -83,7 +83,7 @@ describe('idempotent creation', () => {
         userId: uuid,
         endpoint: 'POST /v1/projects',
         key: 'shared-endpoint',
-        payload: { title: 'Once' },
+        fingerprint: fingerprint('POST', '/v1/projects', { title: 'Once' }),
       },
       async () => ({ id: 'proj_1' }),
     );
@@ -96,6 +96,35 @@ describe('idempotent creation', () => {
       .from(idempotencyKeys)
       .where(and(eq(idempotencyKeys.userId, uuid), eq(idempotencyKeys.key, 'shared-endpoint')));
     expect(keys.map((row) => row.endpoint).sort()).toEqual(['POST /v1/notes', 'POST /v1/projects']);
+  });
+
+  it('replaces an expired key instead of replaying it', async () => {
+    const { token, userId } = await signUp(app);
+    const uuid = fromPublicId('usr', userId) as string;
+    const first = (await (await post(token, 'expired')).json()) as { id: string };
+    await db
+      .update(idempotencyKeys)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(and(eq(idempotencyKeys.userId, uuid), eq(idempotencyKeys.key, 'expired')));
+
+    const again = await post(token, 'expired', 'Different body');
+    expect(again.status).toBe(201);
+    expect(again.headers.get('idempotency-replayed')).toBeNull();
+    const second = (await again.json()) as { id: string };
+    expect(second.id).not.toBe(first.id);
+    expect(await noteCount(userId)).toBe(2);
+
+    const replay = await post(token, 'expired', 'Different body');
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(await replay.json()).toMatchObject({ id: second.id });
+  });
+
+  it('rejects a reused key when any body field differs', async () => {
+    const { token } = await signUp(app);
+    const send = (body: Record<string, string>) =>
+      call(app, 'POST', '/v1/notes', { token, body, headers: { 'Idempotency-Key': 'fields' } });
+    await send({ title: 'Same', body: 'one' });
+    await expectProblem(await send({ title: 'Same', body: 'two' }), 422, 'idempotency-key-reused');
   });
 
   it('creates a new note each time without a key', async () => {
@@ -114,5 +143,26 @@ describe('idempotent creation', () => {
     });
     expect(invalid.status).toBe(400);
     expect((await post(token, 'key-3')).status).toBe(201);
+  });
+});
+
+describe('request fingerprint', () => {
+  it('ignores key order and whitespace', () => {
+    expect(
+      fingerprint('POST', '/v1/notes', { title: 'a', body: 'b', nested: { y: 1, x: 2 } }),
+    ).toBe(fingerprint('POST', '/v1/notes', { nested: { x: 2, y: 1 }, body: 'b', title: 'a' }));
+  });
+
+  it.each([
+    ['the method', fingerprint('PUT', '/v1/notes', { title: 'a' })],
+    ['the path', fingerprint('POST', '/v1/projects', { title: 'a' })],
+    ['a field it has never seen', fingerprint('POST', '/v1/notes', { title: 'a', extra: 1 })],
+    ['a nested value', fingerprint('POST', '/v1/notes', { title: 'a', tags: ['x'] })],
+  ])('changes with %s', (_label, other) => {
+    expect(other).not.toBe(fingerprint('POST', '/v1/notes', { title: 'a' }));
+  });
+
+  it('is a SHA-256 hex digest', () => {
+    expect(fingerprint('POST', '/v1/notes', {})).toMatch(/^[0-9a-f]{64}$/);
   });
 });

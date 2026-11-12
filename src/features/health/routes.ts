@@ -3,10 +3,11 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { createRouter } from '../../platform/router.ts';
+import type { Readiness } from '../../platform/shutdown.ts';
 
 const statusSchema = z.object({ status: z.literal('ok') }).openapi('HealthStatus');
 
-export function createHealthRouter(db: Db) {
+export function createHealthRouter(db: Db, readiness: Readiness) {
   return createRouter()
     .openapi(
       createRoute({
@@ -29,7 +30,7 @@ export function createHealthRouter(db: Db) {
         method: 'get',
         path: '/readyz',
         operationId: 'getReadiness',
-        summary: 'Check that the API can reach Postgres',
+        summary: 'Check that the API can reach Postgres and is not shutting down',
         tags: ['Health'],
         responses: {
           200: {
@@ -40,6 +41,12 @@ export function createHealthRouter(db: Db) {
         },
       }),
       async (c) => {
+        if (readiness.draining) {
+          throw new ProblemError(
+            'service-unavailable',
+            'The API is shutting down. Send traffic to another instance.',
+          );
+        }
         try {
           await db.execute(sql`select 1`);
         } catch (cause) {

@@ -30,6 +30,9 @@ replace:
   - from: "@opikdev"
     to: "@{{owner}}"
     files: [.github/CODEOWNERS]
+  - from: "# API Hono starter\n"
+    to: "# {{name}}\n"
+    files: [README.md]
   - from: api-hono-starter
     to: "{{name}}"
     files:
@@ -39,11 +42,15 @@ replace:
       - src/instrumentation.ts
       - docs/client.md
       - test/e2e/stack.test.ts
+      - test/integration/http.test.ts
 exclude:
   - .baseline.sha256
   - .github/workflows/baseline-check.yml
 setup:
   - pnpm install
+  - pnpm pkg set version=0.1.0
+  - printf '# Changelog\n\nAll notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).\n\n## [Unreleased]\n' > CHANGELOG.md
+  - pnpm openapi:generate
   - pnpm exec biome format --write .
 next:
   - docker compose up --build --wait api

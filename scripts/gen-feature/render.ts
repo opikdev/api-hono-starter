@@ -43,6 +43,7 @@ export function schemaImports(spec: FeatureSpec): string[] {
     'uuid',
   ]);
   for (const field of spec.fields) {
+    if (field.unique) names.add('unique');
     if (['string', 'text', 'enum'].includes(field.type)) names.add('text');
     if (field.type === 'boolean') names.add('boolean');
     if (field.type === 'datetime') names.add('timestamp');
@@ -59,6 +60,13 @@ export function renderTable(spec: FeatureSpec): string {
     .filter((check) => check !== null)
     .map((check) => `    ${check},`)
     .join('\n');
+  const uniques = spec.fields
+    .filter((field) => field.unique)
+    .map(
+      (field) =>
+        `    unique('uq_${spec.table}_user_id_${field.column}').on(table.userId, table.${field.name}),\n`,
+    )
+    .join('');
   return `
 export const ${spec.plural} = pgTable(
   '${spec.table}',
@@ -77,7 +85,7 @@ ${columns}
       foreignColumns: [users.id],
     }).onDelete('cascade'),
     index('idx_${spec.table}_user_id_id').on(table.userId, table.id.desc()),
-${checks}
+${uniques}${checks}
     check('chk_${spec.table}_version_positive', sql\`\${table.version} > 0\`),
   ],
 );
@@ -166,6 +174,43 @@ const changed = {
   datetime: () => `'2027-06-15T12:30:00.000Z'`,
   enum: (field: Field) => quote(field.values.at(-1) as string),
 };
+
+const sequenced: Partial<Record<Field['type'], string>> = {
+  string: `\`Example \${sequence}\``,
+  int: 'sequence',
+  datetime: 'new Date(Date.UTC(2026, 0, 1, 0, 0, sequence)).toISOString()',
+};
+
+function renderUniqueTests(field: Field, fullBody: string): string {
+  return `
+describe('unique ${field.name}', () => {
+  it('rejects a duplicate ${field.name} with 409', async () => {
+    const { token } = await signUp(app);
+    await create(token, ${fullBody});
+    const response = await call(app, 'POST', path, { token, body: ${fullBody} });
+    await expectProblem(response, 409, 'conflict');
+  });
+
+  it('lets another user use the same ${field.name}', async () => {
+    await create((await signUp(app)).token, ${fullBody});
+    const { token } = await signUp(app);
+    expect((await call(app, 'POST', path, { token, body: ${fullBody} })).status).toBe(201);
+  });
+
+  it('rejects an update to a taken ${field.name} with 409', async () => {
+    const { token } = await signUp(app);
+    await create(token, ${fullBody});
+    const other = await create(token);
+    const response = await call(app, 'PATCH', \`\${path}/\${other.id}\`, {
+      token,
+      body: { ${field.name}: ${sample[field.type](field)} },
+      headers: { 'If-Match': '"1"' },
+    });
+    await expectProblem(response, 409, 'conflict');
+  });
+});
+`;
+}
 
 const wrongType = {
   string: () => '123',
@@ -269,10 +314,12 @@ export function renderRoutes(spec: FeatureSpec): string {
   const label = spec.title;
   const article = /^[aeiou]/.test(singular) ? 'an' : 'a';
   const singularLabel = singular.replace(/[A-Z]/g, (char) => ` ${char.toLowerCase()}`);
+  const conflict = spec.fields.some((field) => field.unique) ? `\n            'conflict',` : '';
 
   return `import { createRoute, z } from '@hono/zod-openapi';
 import type { Db } from '../../db/client.ts';
-import { endpointOf, withIdempotency } from '../../platform/idempotency.ts';
+import { idempotencyScope, withIdempotency } from '../../platform/idempotency.ts';
+import { headerRefs } from '../../platform/openapi.ts';
 import { ProblemError, problemResponses } from '../../platform/problem.ts';
 import { fromPublicId, toPublicId } from '../../platform/public-id.ts';
 import {
@@ -376,13 +423,15 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           body: { ...jsonContent(create${Singular}Schema), required: true },
         },
         responses: {
-          201: { description: '${Singular} created', ...jsonContent(${singular}Schema) },
+          201: {
+            description: '${Singular} created',
+            headers: headerRefs('ETag', 'Location', 'Idempotency-Replayed'),
+            ...jsonContent(${singular}Schema),
+          },
           ...problemResponses(
             'validation-failed',
-            'unauthorized',
+            'unauthorized',${conflict}
             'idempotency-key-reused',
-            'unsupported-media-type',
-            'rate-limited',
           ),
         },
       }),
@@ -393,9 +442,8 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           db,
           {
             userId,
-            endpoint: endpointOf(c),
             key: c.req.valid('header')['idempotency-key'],
-            payload: input,
+            ...idempotencyScope(c, input),
           },
           async (tx) => present${Singular}(await insert${Singular}(tx, userId, toValues(input))),
         );
@@ -418,7 +466,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         request: { query: listQuery },
         responses: {
           200: { description: 'A page of ${label}', ...jsonContent(${singular}ListSchema) },
-          ...problemResponses('validation-failed', 'unauthorized', 'rate-limited'),
+          ...problemResponses('validation-failed', 'unauthorized'),
         },
       }),
       async (c) => {
@@ -439,8 +487,12 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         middleware: [requireAuth],
         request: { params: idParams },
         responses: {
-          200: { description: 'The ${singularLabel.trim()}', ...jsonContent(${singular}Schema) },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          200: {
+            description: 'The ${singularLabel.trim()}',
+            headers: headerRefs('ETag'),
+            ...jsonContent(${singular}Schema),
+          },
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {
@@ -468,15 +520,17 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
           body: { ...jsonContent(update${Singular}Schema), required: true },
         },
         responses: {
-          200: { description: 'The updated ${singularLabel.trim()}', ...jsonContent(${singular}Schema) },
+          200: {
+            description: 'The updated ${singularLabel.trim()}',
+            headers: headerRefs('ETag'),
+            ...jsonContent(${singular}Schema),
+          },
           ...problemResponses(
             'validation-failed',
             'unauthorized',
-            'not-found',
+            'not-found',${conflict}
             'version-mismatch',
             'precondition-required',
-            'unsupported-media-type',
-            'rate-limited',
           ),
         },
       }),
@@ -513,7 +567,7 @@ export function create${Plural}Router({ db, requireAuth }: ${Plural}RouterOption
         request: { params: idParams },
         responses: {
           204: { description: '${Singular} deleted' },
-          ...problemResponses('unauthorized', 'not-found', 'rate-limited'),
+          ...problemResponses('unauthorized', 'not-found'),
         },
       }),
       async (c) => {
@@ -551,6 +605,20 @@ export function renderTest(spec: FeatureSpec): string {
     .join('\n');
   const optionalNulls = optional.map((field) => `${field.name}: null`).join(', ');
   const tooLong = spec.fields.find((field) => field.type === 'string');
+  const uniqueFields = spec.fields.filter((field) => field.unique);
+  const nextBody =
+    uniqueFields.length === 0
+      ? ''
+      : `
+let sequence = 0;
+
+function nextBody(): Record<string, unknown> {
+  sequence += 1;
+  return { ...validBody, ${uniqueFields.map((field) => `${field.name}: ${sequenced[field.type]}`).join(', ')} };
+}
+`;
+  const defaultBody = uniqueFields.length === 0 ? 'validBody' : 'nextBody()';
+  const uniqueTests = uniqueFields.map((field) => renderUniqueTests(field, fullBody)).join('');
 
   return `import { describe, expect, it } from 'vitest';
 import { call, expectProblem, signUp, testApp } from '../helpers.ts';
@@ -565,8 +633,8 @@ interface Item {
   version: number;
   [field: string]: unknown;
 }
-
-async function create(token: string, body: Record<string, unknown> = validBody) {
+${nextBody}
+async function create(token: string, body: Record<string, unknown> = ${defaultBody}) {
   const response = await call(app, 'POST', path, { token, body });
   return (await response.json()) as Item;
 }
@@ -587,7 +655,7 @@ ${
     ? `
   it('stores omitted optional fields as null', async () => {
     const { token } = await signUp(app);
-    expect(await create(token)).toMatchObject({ ${optionalNulls} });
+    expect(await create(token, validBody)).toMatchObject({ ${optionalNulls} });
   });
 `
     : ''
@@ -752,5 +820,5 @@ describe('deleting ${title}', () => {
     await expectProblem(await call(app, 'GET', itemPath, { token }), 404, 'not-found');
   });
 });
-`;
+${uniqueTests}`;
 }

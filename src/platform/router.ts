@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { ZodError } from 'zod';
 import { ProblemError } from './problem.ts';
+import type { PolicyState } from './rate-limit.ts';
 
 export interface AuthenticatedUser {
   id: string;
@@ -13,12 +14,13 @@ export interface AppEnv {
   Variables: {
     requestId: string;
     user: AuthenticatedUser;
+    rateLimits: PolicyState[] | undefined;
   };
 }
 
 function toValidationProblem(error: ZodError): ProblemError {
   const errors = error.issues.map((issue) => ({
-    field: issue.path.join('.') || 'body',
+    field: issue.path.join('.'),
     detail: issue.message,
   }));
   return new ProblemError(

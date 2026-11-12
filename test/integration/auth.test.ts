@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { sessions, users } from '../../src/db/schema.ts';
@@ -53,7 +54,7 @@ describe('registration', () => {
   it('stores a hash, not the password', async () => {
     const { email } = await signUp(app);
     const [user] = await db.select().from(users).where(eq(users.email, email));
-    expect(user?.passwordHash).toMatch(/^scrypt\$/);
+    expect(user?.passwordHash).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
     expect(user?.passwordHash).not.toContain(password);
   });
 
@@ -186,6 +187,39 @@ describe('sessions', () => {
   });
 });
 
+function legacyScryptHash(secret: string): string {
+  const salt = randomBytes(16);
+  const key = scryptSync(secret, salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 2 ** 26 });
+  return `scrypt$32768$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`;
+}
+
+describe('password upgrades', () => {
+  it('rehashes a legacy scrypt hash with Argon2id on login', async () => {
+    const email = uniqueEmail();
+    await db.insert(users).values({ email, passwordHash: legacyScryptHash(password) });
+
+    const response = await call(app, 'POST', '/v1/sessions', { body: { email, password } });
+    expect(response.status).toBe(201);
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    expect(user?.passwordHash).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
+    const again = await call(app, 'POST', '/v1/sessions', { body: { email, password } });
+    expect(again.status).toBe(201);
+  });
+
+  it('keeps a legacy hash when the password is wrong', async () => {
+    const email = uniqueEmail();
+    const legacy = legacyScryptHash(password);
+    await db.insert(users).values({ email, passwordHash: legacy });
+
+    const response = await call(app, 'POST', '/v1/sessions', {
+      body: { email, password: 'wrong-horse-battery' },
+    });
+    await expectProblem(response, 401, 'invalid-credentials');
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    expect(user?.passwordHash).toBe(legacy);
+  });
+});
+
 describe('authentication', () => {
   it('returns the current user', async () => {
     const { email, token, userId } = await signUp(app);
@@ -194,10 +228,19 @@ describe('authentication', () => {
     expect(await response.json()).toMatchObject({ id: userId, email });
   });
 
+  it.each(['bearer', 'BEARER', 'Bearer'])('accepts the scheme written as %s', async (scheme) => {
+    const { token } = await signUp(app);
+    const response = await call(app, 'GET', '/v1/users/me', {
+      headers: { Authorization: `${scheme} ${token}` },
+    });
+    expect(response.status).toBe(200);
+  });
+
   it.each([
     ['no token', {}],
     ['a wrong token', { token: 'not-a-real-token' }],
     ['the wrong scheme', { headers: { Authorization: 'Basic abc' } }],
+    ['a scheme with no token', { headers: { Authorization: 'Bearer ' } }],
   ])('rejects %s', async (_label, options) => {
     const response = await call(app, 'GET', '/v1/users/me', options);
     const problem = await expectProblem(response, 401, 'unauthorized');

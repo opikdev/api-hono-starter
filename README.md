@@ -7,14 +7,14 @@ A production-ready TypeScript API you can run with one command and customize wit
 
 ## Features
 
-- **Contract first:** OpenAPI 3.1 is generated from the routes, with docs at `/docs`.
+- **Contract first:** OpenAPI 3.1 is generated from the routes, with self-hosted docs at `/docs` when `DOCS_ENABLED` is on.
 - **Feature generator:** `pnpm gen:feature` creates a full CRUD feature with tests that pass every gate. Answer prompts, or pass it all on one line.
 - **Typed client:** `AppType` gives TypeScript callers every route and response type through Hono RPC. See [Call the API from TypeScript](docs/client.md).
 - **Auth:** registration, login, and revocable sessions, with per-user data access. Send the token as a bearer header, or [keep it in an `HttpOnly` cookie](docs/client.md#log-in-from-a-browser) for a browser app on the same origin.
-- **Reliable by default:** rate limits, idempotency keys, optimistic concurrency, and cursor pagination.
+- **Reliable by default:** rate limits per network and per account, idempotency keys, optimistic concurrency, cursor pagination, and graceful draining on shutdown.
 - **Consistent errors:** RFC 9457 Problem Details everywhere. See the [error reference](docs/errors.md).
 - **Safe data layer:** Drizzle migrations, constraints in the database, and an app role that can't change the schema.
-- **Ready to operate:** a non-root Docker image, health checks, JSON logs, and OpenTelemetry traces.
+- **Ready to operate:** a read-only, non-root Docker image pinned by digest, health checks, JSON logs with trace IDs, and OpenTelemetry traces and metrics.
 - **Agent-ready:** `AGENTS.md`, skills, and a pre-commit hook that checks the agent docs, links, decisions, skills, and `.mcp.json`. `pnpm verify` and CI run the full gates.
 - **Strict gates:** strict types, lint, 90% coverage, architecture tests, and real end-to-end tests.
 
@@ -42,7 +42,7 @@ Send the returned token to list the seeded notes:
 curl localhost:3000/v1/notes -H 'Authorization: Bearer <YOUR_TOKEN>'
 ```
 
-If port 3000 or 5432 is taken, set `PORT` or `POSTGRES_PORT` before running Compose.
+If port 3000 or 5432 is taken, set `API_PORT` or `POSTGRES_PORT` before running Compose.
 
 ## Start your own project
 
@@ -65,13 +65,15 @@ docker compose run --build --rm migrate
 pnpm dev
 ```
 
+`pnpm dev` serves on <http://localhost:3001>, the `PORT` in `.env`, so it can run next to the Compose API on 3000.
+
 | Task                                                      | Command                 |
 | --------------------------------------------------------- | ----------------------- |
 | Run lint, types, migrations check, tests, and repo checks | `pnpm verify`           |
 | Test the real image end to end                            | `pnpm test:e2e`         |
 | Generate a CRUD feature, with prompts | `pnpm gen:feature` |
 | Generate a CRUD feature in one line | `pnpm gen:feature projects name:string dueAt:datetime:optional` |
-| Create a migration after editing `src/db/schema.ts`       | `pnpm db:generate`      |
+| Create a migration after editing `src/db/schema.ts`       | `pnpm db:generate --name <what_it_does>` |
 | Update `openapi.json` after changing a route              | `pnpm openapi:generate` |
 
 Tests start their own Postgres, so Docker must be running. Without Docker, point them at a Postgres 18 server instead:
@@ -80,7 +82,7 @@ Tests start their own Postgres, so Docker must be running. Without Docker, point
 TEST_DATABASE_URL=postgres://<SUPERUSER>@localhost:5432/postgres pnpm verify
 ```
 
-Each run creates a temporary database and drops it afterward, so existing data is never touched. The user needs permission to create databases and roles. To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). Before you deploy, read [Operate the API](docs/operations.md).
+Each run creates a temporary database and drops it afterward, so existing data is never touched. The user needs permission to create databases and roles. To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). Before you deploy, read [Go live](docs/deploy.md) and [Operate the API](docs/operations.md).
 
 ## Project structure
 

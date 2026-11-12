@@ -237,7 +237,8 @@ describe('updating a note', () => {
       body: {},
       headers: { 'If-Match': '"1"' },
     });
-    await expectProblem(response, 400, 'validation-failed');
+    const problem = await expectProblem(response, 400, 'validation-failed');
+    expect(problem.errors).toEqual([{ field: '', detail: 'Provide title, body, or both' }]);
   });
 
   it.each([

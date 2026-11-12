@@ -36,6 +36,37 @@ const httpExceptionProblems: Partial<Record<number, [ProblemSlug, string]>> = {
   504: ['timeout', 'The request took too long. Retry later.'],
 };
 
+const constraintProblems: Partial<Record<string, () => ProblemError>> = {
+  '23505': () =>
+    new ProblemError(
+      'conflict',
+      'The request conflicts with data that already exists. Change the conflicting value, then retry.',
+    ),
+  '23503': () =>
+    new ProblemError(
+      'conflict',
+      'The request refers to data that does not exist, or that other data still depends on.',
+    ),
+  '23514': () =>
+    new ProblemError(
+      'validation-failed',
+      'A value is outside the allowed range. Fix it and retry.',
+    ),
+};
+
+function postgresCode(error: unknown): string | undefined {
+  for (let current = error; current instanceof Error; current = current.cause) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+}
+
+function toConstraintProblem(error: Error): ProblemError | null {
+  const code = postgresCode(error);
+  return (code && constraintProblems[code]?.()) || null;
+}
+
 function toProblem(error: HTTPException): ProblemError | null {
   if (error.status === 400 && error.message === malformedJsonMessage) {
     return new ProblemError(
@@ -57,6 +88,12 @@ export function createErrorHandler(logger: Logger): ErrorHandler<AppEnv> {
 
     const problem = error instanceof HTTPException ? toProblem(error) : null;
     if (problem) return respond(c, problem);
+
+    const constraintProblem = toConstraintProblem(error);
+    if (constraintProblem) {
+      logger.warn({ err: error, requestId: c.get('requestId') }, 'Constraint violation');
+      return respond(c, constraintProblem);
+    }
 
     reportError(error, logger, c.get('requestId'));
     const detail = `Something went wrong on our side. Retry, and quote request ${c.get('requestId')} if it persists.`;

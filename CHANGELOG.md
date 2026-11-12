@@ -4,6 +4,46 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Security
+
+- Rate limits count an IPv6 client by its /64 and an IPv4-mapped address as IPv4, so rotating addresses within one network no longer resets the budget.
+- `POST /v1/sessions` allows `LOGIN_FAILURE_LIMIT` failed logins, default 5, per email in each `LOGIN_FAILURE_WINDOW_SECONDS`, default 900, whether or not the account exists. Past it, login returns 429 without checking the password.
+- Every response sends `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, except `/docs`, which allows only its own assets.
+- Every `/v1` response sends `Cache-Control: no-store`, not just login.
+- Passwords are hashed with Argon2id at OWASP's minimum, 19 MiB, 2 passes, and 1 lane, instead of scrypt. Existing scrypt hashes are rehashed on the next successful login. See [ADR 009](docs/decisions/009-hash-passwords-with-argon2id.md).
+- The runtime image ships without npm and npx, runs on a read-only filesystem in Compose, and its base image is pinned by digest.
+- Releases scan the image with Trivy before pushing it, and publish an SBOM, `mode=max` provenance, and a signed build attestation. CI scans the image on every pull request.
+
+### Changed
+
+- **Breaking:** rate limits send the IETF draft `RateLimit` and `RateLimit-Policy` headers, such as `"global";r=238;t=25`, instead of `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset`. CORS exposes the new names. See [Rate limits](docs/operations.md#rate-limits).
+- **Breaking:** `DOCS_ENABLED` defaults to `false`, so `/docs` and `/openapi.json` return 404 unless you turn it on. `.env.example`, Compose, and the tests turn it on. See [ADR 008](docs/decisions/008-turn-api-docs-off-by-default.md).
+- **Breaking:** Compose publishes the API on `API_PORT` instead of `PORT`, and `.env.example` sets `PORT=3001`, so `pnpm dev` runs next to the Compose API.
+- **Breaking:** `withIdempotency` takes a `fingerprint` instead of a `payload`, and `endpointOf` is now `idempotencyScope`, which returns both. Update features you generated as `src/features/notes/routes.ts` does.
+- A validation error about the whole body, such as an empty `PATCH`, has an empty `field` instead of `body`, which clashed with the note's `body` field.
+- OpenAPI `info.title` and `info.version` come from `package.json`. Problems and headers are shared components, and every operation documents the 403, 413, 415, 429, and 500 that middleware can return. Routes no longer list `rate-limited` or `unsupported-media-type` themselves.
+- On `SIGTERM`, the API fails `/readyz` for `SHUTDOWN_DRAIN_SECONDS`, default 5, before it stops accepting connections, then gives requests in flight `SHUTDOWN_TIMEOUT_SECONDS`, default 30, instead of 5. Compose waits 45 seconds before killing it.
+- Compose builds the image once, and `api` reuses it.
+- `/healthz` and `/readyz` log at `debug` and aren't traced. The healthcheck uses `wget`, not a Node process.
+
+### Added
+
+- `pnpm gen:feature` takes a `:unique` field modifier, which adds a per-user unique constraint, documents 409, and generates tests for it.
+- Postgres unique and foreign key violations return 409 `urn:problem:conflict`, and check violations return 400 `validation-failed`, without the constraint name. They were 500s.
+- Log lines written during a traced request include `trace_id` and `span_id`. Metrics, including request duration and pool connections, export over OTLP with traces. The hourly cleanup is traced.
+- [Go live](docs/deploy.md), a checklist for TLS, Postgres TLS, pool sizing, migrations, secrets, draining, docs, and telemetry.
+- `docs/customize.md` shows how to add a join table and name a migration with `pnpm db:generate --name`.
+
+### Fixed
+
+- On a 429 from the auth limit, the global limit overwrote the rate-limit headers, so they described the wrong policy. A 429 now describes only the policy that was exceeded.
+- Two migration runners started together could both apply the same migration. The runner now holds an advisory lock for the whole run.
+- An idempotency key past its 24 hours could still replay until the hourly cleanup ran. An expired key is now replaced.
+- The idempotency fingerprint covers the method, path, and whole body, with keys sorted, so a new field can't be missed.
+- `Authorization: bearer <token>` is accepted, because the scheme is case-insensitive.
+- `/docs` loaded Swagger UI from jsDelivr without a pinned version. It's now served from `swagger-ui-dist`, pinned in `package.json`.
+- Projects created with `pik new` get their own README title, version 0.1.0, and an empty changelog.
+
 ## [0.4.0] - 2026-11-11
 
 ### Added

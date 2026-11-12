@@ -8,7 +8,7 @@ import { call, db, expectProblem, signUp, testApp, testConfig } from '../helpers
 const app = testApp();
 
 function spyLogger() {
-  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   return { logger, asLogger: logger as unknown as Logger };
 }
 
@@ -76,6 +76,32 @@ describe('security headers', () => {
     expect(response.headers.get('x-powered-by')).toBeNull();
   });
 
+  it.each(['/healthz', '/v1/notes', '/v1/nope', '/openapi.json'])(
+    'locks down the content security policy on %s',
+    async (path) => {
+      const response = await call(app, 'GET', path);
+      expect(response.headers.get('content-security-policy')).toBe(
+        "default-src 'none'; frame-ancestors 'none'",
+      );
+    },
+  );
+
+  it.each([
+    ['a success', 'GET', '/v1/users/me', true],
+    ['an auth failure', 'GET', '/v1/notes', false],
+    ['an unknown route', 'GET', '/v1/nope', false],
+    ['a blocked cross-site write', 'POST', '/v1/notes', false],
+  ] as const)('forbids caching %s on /v1', async (_label, method, path, signedIn) => {
+    const token = signedIn ? (await signUp(app)).token : undefined;
+    const response = await call(app, method, path, {
+      ...(token ? { token } : {}),
+      ...(method === 'POST'
+        ? { body: {}, headers: { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' } }
+        : {}),
+    });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('returns a request id', async () => {
     const response = await call(app, 'GET', '/healthz');
     expect(response.headers.get('x-request-id')).toBeTruthy();
@@ -129,9 +155,8 @@ describe('CORS', () => {
       'Location',
       'X-Request-Id',
       'Retry-After',
-      'RateLimit-Limit',
-      'RateLimit-Remaining',
-      'RateLimit-Reset',
+      'RateLimit',
+      'RateLimit-Policy',
       'Idempotency-Replayed',
     ]);
   });
@@ -191,20 +216,51 @@ describe('logging', () => {
   });
 });
 
+describe('health check logging', () => {
+  it.each(['/healthz', '/readyz'])('logs %s at debug, not info', async (path) => {
+    const { logger, asLogger } = spyLogger();
+    const logged = createApp({ config: testConfig(), db, logger: asLogger });
+    await call(logged, 'GET', path);
+    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledOnce();
+  });
+});
+
 describe('OpenAPI', () => {
-  const spec = async () => {
-    const response = await call(app, 'GET', '/openapi.json');
-    return (await response.json()) as {
-      openapi: string;
-      paths: Record<string, Record<string, Operation>>;
-    };
-  };
+  interface Response {
+    $ref?: string;
+    content?: Record<string, unknown>;
+    headers?: Record<string, unknown>;
+  }
 
   interface Operation {
     operationId?: string;
     summary?: string;
     security?: unknown[];
-    responses: Record<string, { content?: Record<string, unknown> }>;
+    requestBody?: unknown;
+    responses: Record<string, Response>;
+  }
+
+  interface Document {
+    openapi: string;
+    paths: Record<string, Record<string, Operation>>;
+    components: { responses: Record<string, Response>; headers: Record<string, unknown> };
+  }
+
+  const spec = async () => {
+    const response = await call(app, 'GET', '/openapi.json');
+    return (await response.json()) as Document;
+  };
+
+  function operationsOf(document: Document) {
+    return Object.entries(document.paths).flatMap(([path, methods]) =>
+      Object.entries(methods).map(([method, operation]) => ({ path, method, operation })),
+    );
+  }
+
+  function resolve(document: Document, response: Response): Response {
+    const name = response.$ref?.replace('#/components/responses/', '');
+    return name ? (document.components.responses[name] as Response) : response;
   }
 
   const publicOperations = ['createUser', 'createSession'];
@@ -219,38 +275,102 @@ describe('OpenAPI', () => {
   });
 
   it('documents every operation fully', async () => {
-    const { paths } = await spec();
-    const operations = Object.entries(paths).flatMap(([path, methods]) =>
-      Object.values(methods).map((operation) => ({ path, operation })),
-    );
+    const operations = operationsOf(await spec());
     expect(operations.length).toBeGreaterThan(8);
 
     for (const { path, operation } of operations) {
       expect(operation.operationId, path).toBeTruthy();
       expect(operation.summary, path).toBeTruthy();
-      if (!path.startsWith('/v1')) continue;
-
-      expect(operation.responses['429'], `${path} documents 429`).toBeDefined();
-      if (!publicOperations.includes(operation.operationId as string)) {
-        expect(operation.security, `${path} declares auth`).toEqual([
-          { bearerAuth: [] },
-          { cookieAuth: [] },
-        ]);
-        expect(operation.responses['401'], `${path} documents 401`).toBeDefined();
+      if (!path.startsWith('/v1') || publicOperations.includes(operation.operationId as string)) {
+        continue;
       }
-      for (const [status, response] of Object.entries(operation.responses)) {
+      expect(operation.security, `${path} declares auth`).toEqual([
+        { bearerAuth: [] },
+        { cookieAuth: [] },
+      ]);
+      expect(operation.responses['401'], `${path} documents 401`).toBeDefined();
+    }
+  });
+
+  it('documents every status the middleware can return', async () => {
+    const document = await spec();
+    for (const { path, method, operation } of operationsOf(document)) {
+      const label = `${method.toUpperCase()} ${path}`;
+      const expected = ['500'];
+      if (path.startsWith('/v1/')) expected.push('429');
+      if (path.startsWith('/v1/') && ['post', 'put', 'patch', 'delete'].includes(method)) {
+        expected.push('403');
+      }
+      if (operation.requestBody) expected.push('413', '415');
+      expect(Object.keys(operation.responses), label).toEqual(expect.arrayContaining(expected));
+
+      for (const [status, reference] of Object.entries(operation.responses)) {
+        const response = resolve(document, reference);
+        expect(response, `${label} ${status} resolves`).toBeDefined();
+        const headers = Object.keys(response.headers ?? {});
+        expect(headers, `${label} ${status}`).toContain('X-Request-Id');
+        if (path.startsWith('/v1/')) {
+          expect(headers, `${label} ${status}`).toEqual(
+            expect.arrayContaining(['RateLimit', 'RateLimit-Policy', 'Cache-Control']),
+          );
+        }
         if (Number(status) >= 400) {
-          expect(response.content, `${path} ${status}`).toHaveProperty([
+          expect(response.content, `${label} ${status}`).toHaveProperty([
             'application/problem+json',
           ]);
+        }
+        if (status === '429') expect(headers, label).toContain('Retry-After');
+        if (status === '201' && path === '/v1/notes') {
+          expect(headers, label).toEqual(expect.arrayContaining(['Location', 'ETag']));
         }
       }
     }
   });
 
-  it('serves the docs page', async () => {
+  it('never documents a framework validation 422', async () => {
+    const document = await spec();
+    for (const { path, operation } of operationsOf(document)) {
+      const response = operation.responses['422'];
+      if (!response) continue;
+      expect(response.$ref, path).toBe('#/components/responses/UnprocessableContent');
+      expect(path, 'only idempotent creates return 422').toMatch(/^\/v1\/[a-z-]+$/);
+    }
+  });
+
+  it('serves the docs page from its own assets, under a strict policy', async () => {
     const response = await call(app, 'GET', '/docs');
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('swagger');
+    expect(response.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    );
+    const page = await response.text();
+    expect(page).toContain('<title>api-hono-starter</title>');
+    expect(page).not.toMatch(/https?:\/\//);
+    const inline = [...page.matchAll(/<(script|style)\b[^>]*>/gi)].filter(
+      ([tag, name]) => name?.toLowerCase() === 'style' || !/\ssrc=/i.test(tag),
+    );
+    expect(inline).toEqual([]);
+    expect(page).not.toMatch(/\sstyle\s*=/i);
+    for (const src of page.matchAll(/(?:src|href)="([^"]+)"/g)) {
+      const asset = await call(app, 'GET', src[1] as string);
+      expect(asset.status, src[1]).toBe(200);
+      expect(asset.headers.get('content-security-policy'), src[1]).toContain("script-src 'self'");
+    }
   });
+
+  it('titles the document with the project name and version', async () => {
+    const { info } = (await (await call(app, 'GET', '/openapi.json')).json()) as {
+      info: { title: string; version: string };
+    };
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+    expect(info).toEqual({ title: 'api-hono-starter', version });
+  });
+
+  it.each(['/docs', '/docs/init.js', '/openapi.json'])(
+    'returns 404 for %s when docs are off, as they are by default',
+    async (path) => {
+      const response = await call(testApp({ DOCS_ENABLED: 'false' }), 'GET', path);
+      await expectProblem(response, 404, 'not-found');
+    },
+  );
 });

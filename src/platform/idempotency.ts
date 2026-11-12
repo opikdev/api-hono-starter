@@ -12,7 +12,7 @@ interface IdempotentRequest {
   userId: string;
   endpoint: string;
   key: string | undefined;
-  payload: unknown;
+  fingerprint: string;
 }
 
 export interface IdempotentResult<T> {
@@ -22,24 +22,40 @@ export interface IdempotentResult<T> {
 
 const retention = sql`now() + interval '24 hours'`;
 
-/** Scopes keys to the route, such as `POST /v1/notes`, so one key can't replay another endpoint. */
-export function endpointOf(c: Context): string {
-  return `${c.req.method} ${routePath(c)}`;
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item !== null && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : item,
+  );
 }
 
-function hashPayload(payload: unknown): string {
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+/** Hashes the method, path, and whole validated body, with keys sorted, so every field counts. */
+export function fingerprint(method: string, path: string, body: unknown): string {
+  return createHash('sha256')
+    .update(`${method} ${path}\n${canonicalJson(body)}`)
+    .digest('hex');
+}
+
+/**
+ * Scopes keys to the route, such as `POST /v1/notes`, so one key can't replay another endpoint,
+ * and fingerprints the request, so a key reused with a different request is rejected.
+ */
+export function idempotencyScope(c: Context, body: unknown) {
+  return {
+    endpoint: `${c.req.method} ${routePath(c)}`,
+    fingerprint: fingerprint(c.req.method, c.req.path, body),
+  };
 }
 
 export function withIdempotency<T>(
   db: Db,
-  { userId, endpoint, key, payload }: IdempotentRequest,
+  { userId, endpoint, key, fingerprint: requestHash }: IdempotentRequest,
   create: (tx: Transaction) => Promise<T>,
 ): Promise<IdempotentResult<T>> {
   return db.transaction(async (tx) => {
     if (!key) return { body: await create(tx), replayed: false };
 
-    const requestHash = hashPayload(payload);
     const [claimed] = await tx
       .insert(idempotencyKeys)
       .values({
@@ -50,8 +66,10 @@ export function withIdempotency<T>(
         responseBody: {},
         expiresAt: retention,
       })
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
         target: [idempotencyKeys.userId, idempotencyKeys.endpoint, idempotencyKeys.key],
+        set: { requestHash, responseBody: {}, expiresAt: retention, updatedAt: sql`now()` },
+        setWhere: sql`${idempotencyKeys.expiresAt} <= now()`,
       })
       .returning({ id: idempotencyKeys.id });
 

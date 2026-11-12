@@ -2,10 +2,13 @@ import type { AddressInfo } from 'node:net';
 import { type ServerType, serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { describe, expect, inject, it } from 'vitest';
+import { createApp } from '../../src/app.ts';
 import { createPool } from '../../src/db/client.ts';
-import { onShutdown, shutdown } from '../../src/platform/shutdown.ts';
+import { createLogger } from '../../src/platform/logger.ts';
+import { onShutdown, type Readiness, shutdown } from '../../src/platform/shutdown.ts';
+import { call, db, expectProblem, signUp, testConfig } from '../helpers.ts';
 
-function listen(app: Hono): Promise<{ server: ServerType; url: string }> {
+function listen(app: { fetch: Hono['fetch'] }): Promise<{ server: ServerType; url: string }> {
   return new Promise((resolve) => {
     const server = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, (info) => {
       resolve({ server, url: `http://127.0.0.1:${(info as AddressInfo).port}` });
@@ -13,8 +16,35 @@ function listen(app: Hono): Promise<{ server: ServerType; url: string }> {
   });
 }
 
+describe('draining', () => {
+  it('fails readiness while still serving requests', async () => {
+    const readiness: Readiness = { draining: false };
+    const app = createApp({ config: testConfig(), db, logger: createLogger('silent'), readiness });
+    const { token } = await signUp(app);
+    expect((await call(app, 'GET', '/readyz')).status).toBe(200);
+
+    readiness.draining = true;
+    await expectProblem(await call(app, 'GET', '/readyz'), 503, 'service-unavailable');
+    expect((await call(app, 'GET', '/healthz')).status).toBe(200);
+    expect((await call(app, 'GET', '/v1/users/me', { token })).status).toBe(200);
+  });
+});
+
 describe('shutdown', () => {
-  it('cuts off a hung request at the deadline, then closes the pool, then runs final tasks', async () => {
+  it('drains first, keeps serving, then stops accepting connections', async () => {
+    const readiness: Readiness = { draining: false };
+    const app = new Hono().get('/', (c) => c.text(readiness.draining ? 'draining' : 'ready'));
+    const { server, url } = await listen(app);
+    const pool = createPool(inject('databaseUrl'), 1000, 1);
+
+    const stopped = shutdown({ server, pool, readiness, drainMs: 300, timeoutMs: 1000 });
+    expect(readiness.draining).toBe(true);
+    expect(await (await fetch(url)).text()).toBe('draining');
+    await stopped;
+    await expect(fetch(url)).rejects.toThrow();
+  });
+
+  it('cuts off a hung request at the timeout, then closes the pool, then runs final tasks', async () => {
     let arrived: () => void = () => {};
     const requestArrived = new Promise<void>((resolve) => {
       arrived = resolve;
@@ -37,7 +67,7 @@ describe('shutdown', () => {
     );
     await requestArrived;
     const startedAt = performance.now();
-    await shutdown({ server, pool, drainMs: 200 });
+    await shutdown({ server, pool, readiness: { draining: false }, drainMs: 0, timeoutMs: 200 });
 
     expect(performance.now() - startedAt).toBeGreaterThanOrEqual(190);
     expect(await hung).toBe('cut off');
@@ -52,7 +82,7 @@ describe('shutdown', () => {
     const pool = createPool(inject('databaseUrl'), 1000, 1);
 
     const startedAt = performance.now();
-    await shutdown({ server, pool, drainMs: 10_000 });
+    await shutdown({ server, pool, readiness: { draining: false }, drainMs: 0, timeoutMs: 10_000 });
     expect(performance.now() - startedAt).toBeLessThan(2_000);
   });
 });

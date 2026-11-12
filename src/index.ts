@@ -4,11 +4,10 @@ import { loadConfig } from './config.ts';
 import { createDb, createPool } from './db/client.ts';
 import { deleteExpiredRows } from './platform/cleanup.ts';
 import { createLogger } from './platform/logger.ts';
-import { shutdown } from './platform/shutdown.ts';
+import { type Readiness, shutdown } from './platform/shutdown.ts';
 
 const cleanupIntervalMs = 60 * 60 * 1000;
-const drainMs = 5_000;
-const shutdownDeadlineMs = 9_000;
+const closeMarginMs = 10_000;
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -19,7 +18,8 @@ const pool = createPool(
 );
 pool.on('error', (err) => logger.error({ err }, 'Idle database connection failed'));
 const db = createDb(pool);
-const app = createApp({ config, db, logger });
+const readiness: Readiness = { draining: false };
+const app = createApp({ config, db, logger, readiness });
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, ({ port }) => {
   logger.info({ port }, 'Server listening');
@@ -35,13 +35,16 @@ let stopping = false;
 function stop(signal: NodeJS.Signals) {
   if (stopping) return;
   stopping = true;
-  logger.info({ signal }, 'Shutting down');
+  const drainMs = config.SHUTDOWN_DRAIN_SECONDS * 1000;
+  const timeoutMs = config.SHUTDOWN_TIMEOUT_SECONDS * 1000;
+  const shutdownDeadlineMs = drainMs + timeoutMs + closeMarginMs;
+  logger.info({ signal, drainMs, timeoutMs }, 'Draining, then shutting down');
   clearInterval(cleanup);
   setTimeout(() => {
     logger.error({ deadlineMs: shutdownDeadlineMs }, 'Shutdown timed out');
     process.exit(1);
   }, shutdownDeadlineMs).unref();
-  shutdown({ server, pool, drainMs }).then(
+  shutdown({ server, pool, readiness, drainMs, timeoutMs }).then(
     () => process.exit(0),
     (err: unknown) => {
       logger.error({ err }, 'Shutdown failed');

@@ -64,3 +64,38 @@ describe('error handler', () => {
     expect(logger.error).toHaveBeenCalledOnce();
   });
 });
+
+class PostgresError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+function wrapped(code: string) {
+  const cause = new PostgresError(code, 'violates constraint "uq_projects_user_id_slug"');
+  return new Error('Failed query: insert into "projects" values ($1)', { cause });
+}
+
+describe('database errors', () => {
+  it.each([
+    ['23505', 409, 'conflict'],
+    ['23503', 409, 'conflict'],
+    ['23514', 400, 'validation-failed'],
+  ] as const)('maps Postgres %s to %i %s without leaking it', async (code, status, slug) => {
+    const { response, body, logger } = await problemFor(wrapped(code));
+    expect(response.status).toBe(status);
+    expect(body).toMatchObject({ type: `urn:problem:${slug}`, status });
+    expect(JSON.stringify(body)).not.toMatch(/uq_projects|insert into|constraint/);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it('keeps other database errors as a logged 500', async () => {
+    const { response, logger } = await problemFor(wrapped('42P01'));
+    expect(response.status).toBe(500);
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
+});

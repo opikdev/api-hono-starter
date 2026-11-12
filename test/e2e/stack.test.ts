@@ -6,11 +6,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const port = process.env.E2E_PORT ?? '3100';
 const dbPort = process.env.E2E_DB_PORT ?? '5532';
-const otlpPort = 4319;
+const otlpPort = Number(process.env.E2E_OTLP_PORT ?? '4319');
 const baseUrl = `http://127.0.0.1:${port}`;
 const composeEnv = {
   ...process.env,
-  PORT: port,
+  API_PORT: port,
   POSTGRES_PORT: dbPort,
   OTEL_EXPORTER_OTLP_ENDPOINT: `http://host.docker.internal:${otlpPort}`,
   COMPOSE_PROJECT_NAME: 'api-hono-starter-e2e',
@@ -32,6 +32,7 @@ async function composeAsync(...args: string[]) {
 }
 
 let traceBytes = '';
+let metricBytes = '';
 let collector: Server;
 
 async function waitFor(check: () => Promise<boolean> | boolean, timeoutMs = 20_000) {
@@ -59,6 +60,9 @@ beforeAll(async () => {
       if (request.url === '/v1/traces') {
         traceBytes += Buffer.concat(chunks).toString('latin1');
       }
+      if (request.url === '/v1/metrics') {
+        metricBytes += Buffer.concat(chunks).toString('latin1');
+      }
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end('{}');
     });
@@ -82,6 +86,13 @@ describe('the running stack', () => {
   it('reports the API container as healthy', () => {
     const state = JSON.parse(compose('ps', 'api', '--format', 'json').trim());
     expect(state.Health).toBe('healthy');
+  });
+
+  it('runs on a read-only filesystem, without package managers', () => {
+    expect(() => compose('exec', '-T', 'api', 'touch', '/app/written')).toThrow();
+    for (const tool of ['npm', 'npx', 'corepack', 'yarn']) {
+      expect(() => compose('exec', '-T', 'api', 'which', tool), tool).toThrow();
+    }
   });
 
   it('runs as a non-root user', () => {
@@ -193,9 +204,11 @@ describe('the running stack', () => {
         return [];
       }
     });
-    expect(entries.some((entry) => entry.msg === 'Request completed' && entry.requestId)).toBe(
-      true,
-    );
+    const requests = entries.filter((entry) => entry.msg === 'Request completed');
+    expect(requests.some((entry) => entry.requestId)).toBe(true);
+    expect(requests.some((entry) => /^[0-9a-f]{32}$/.test(String(entry.trace_id)))).toBe(true);
+    expect(requests.some((entry) => /^[0-9a-f]{16}$/.test(String(entry.span_id)))).toBe(true);
+    expect(requests.filter((entry) => entry.path === '/healthz')).toEqual([]);
   });
 
   it('never logs credentials', () => {
@@ -240,11 +253,18 @@ describe('the running stack', () => {
     expect(login.status).toBe(201);
   });
 
-  it('flushes traces and shuts down cleanly on SIGTERM', async () => {
+  it('leaves health checks out of traces', () => {
+    expect(traceBytes).not.toContain('/healthz');
+    expect(traceBytes).not.toContain('/readyz');
+  });
+
+  it('flushes traces and metrics and shuts down cleanly on SIGTERM', async () => {
     const marker = randomUUID();
-    expect((await fetch(`${baseUrl}/healthz?marker=${marker}`)).status).toBe(200);
+    expect((await fetch(`${baseUrl}/v1/notes?marker=${marker}`)).status).toBe(401);
     await composeAsync('stop', 'api');
     expect(traceBytes).toContain(marker);
+    expect(metricBytes).toContain('http.server.request.duration');
+    expect(metricBytes).toContain('db.client.connection.count');
     const state = compose('ps', '--all', 'api', '--format', '{{.ExitCode}}').trim();
     expect(state).toBe('0');
   });

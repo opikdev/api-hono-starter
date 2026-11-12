@@ -19,8 +19,11 @@ services:
       timeout: 3s
       retries: 90
 
+  # Builds the image that api reuses, so Compose builds it once.
   migrate:
+    image: api-hono-starter:local
     build: .
+    read_only: true
     command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
     environment:
       MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api
@@ -30,14 +33,18 @@ services:
         condition: service_healthy
 
   api:
-    build: .
+    image: api-hono-starter:local
+    pull_policy: never
+    read_only: true
+    stop_grace_period: 45s
     environment:
       DATABASE_URL: postgres://api_app:api_app_dev_password@db:5432/api
+      DOCS_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
-      - 127.0.0.1:${PORT:-3000}:3000
+      - 127.0.0.1:${API_PORT:-3000}:3000
     depends_on:
       migrate:
         condition: service_completed_successfully
