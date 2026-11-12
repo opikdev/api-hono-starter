@@ -8,7 +8,8 @@ A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with au
 | [docs/customize.md](docs/customize.md)       | How to add a feature, rename the project, or remove a module |
 | [docs/client.md](docs/client.md) | How to call the API with the typed client |
 | [docs/errors.md](docs/errors.md)             | Every problem type the API can return                        |
-| [docs/operations.md](docs/operations.md)     | Deploys, migrations, backups, and tracing                    |
+| [docs/operations.md](docs/operations.md)     | Settings, rate limits, migrations, backups, and telemetry    |
+| [docs/deploy.md](docs/deploy.md)             | The go-live checklist: TLS, secrets, draining, and docs      |
 | [docs/decisions/](docs/decisions/)           | Why it's built this way                                      |
 | `.agents/skills/`                            | Step-by-step guides for recurring tasks                      |
 | `.mcp.json`                                  | MCP servers for this project                                 |
@@ -18,7 +19,7 @@ A production-ready TypeScript API: Hono, Drizzle, Postgres, and OpenAPI, with au
 | Task                            | Command                                                |
 | ------------------------------- | ------------------------------------------------------ |
 | Run everything                  | `docker compose up --build --wait api`                     |
-| Run the API on your machine     | `docker compose run --build --rm migrate`, then `pnpm dev` |
+| Run the API on your machine, on :3001 | `docker compose run --build --rm migrate`, then `pnpm dev` |
 | Run all gates                   | `pnpm verify`                                          |
 | Test against real Docker images | `pnpm test:e2e`                                        |
 | Generate a CRUD feature | `pnpm gen:feature <name> <field:type> ... --yes --json` |

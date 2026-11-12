@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS, cross-origin check, body limit, rate limit"]
+  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS, no-store, cross-origin check, body limit, rate limit"]
   M --> R["Feature routes"]
   R --> S["Stores"]
   S --> P[(Postgres)]
@@ -29,4 +29,6 @@ flowchart LR
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
 - **Idempotency:** keys are scoped to the user and the endpoint, such as `POST /v1/notes`. The key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
+- **Rate limits:** a global and an auth limit per client network, and a failed-login limit per account, all counted in Postgres. See [Rate limits](operations.md#rate-limits).
+- **Contract coverage:** `src/platform/openapi.ts` adds the problems and headers that middleware returns to every operation, so routes declare only their own.
 - **Database roles:** the API connects as `api_app`, which can read and write rows but can't change the schema. Migrations run as `api_owner`.

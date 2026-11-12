@@ -1,6 +1,6 @@
 # 001. Use opaque session tokens
 
-- **Status**: accepted
+- **Status**: accepted. Password hashing is superseded by [ADR 009](009-hash-passwords-with-argon2id.md)
 - **Context**: The API needs auth that works from one command, and logout must take effect at once. JWTs need a signing secret and can't be revoked without a deny list.
 - **Decision**: Issue random bearer tokens, store only their SHA-256 hash in Postgres, and hash passwords with scrypt from `node:crypto`.
 - **Consequences**:
