@@ -22,6 +22,7 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     TRUST_PROXY_HOPS: '1',
     RATE_LIMIT_PER_MINUTE: '100000',
     AUTH_RATE_LIMIT_PER_MINUTE: '100000',
+    DOCS_ENABLED: 'true',
     ...overrides,
   });
 }

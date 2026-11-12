@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "API Hono starter",
-    "version": "1.0.0"
+    "title": "api-hono-starter",
+    "version": "0.4.0"
   },
   "components": {
     "securitySchemes": {

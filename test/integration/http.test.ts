@@ -273,9 +273,36 @@ describe('OpenAPI', () => {
     }
   });
 
-  it('serves the docs page', async () => {
+  it('serves the docs page from its own assets, under a strict policy', async () => {
     const response = await call(app, 'GET', '/docs');
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('swagger');
+    expect(response.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    );
+    const page = await response.text();
+    expect(page).toContain('<title>api-hono-starter</title>');
+    expect(page).not.toMatch(/https?:\/\//);
+    expect(page).not.toMatch(/<script>|<style>|style="/);
+    for (const src of page.matchAll(/(?:src|href)="([^"]+)"/g)) {
+      const asset = await call(app, 'GET', src[1] as string);
+      expect(asset.status, src[1]).toBe(200);
+      expect(asset.headers.get('content-security-policy'), src[1]).toContain("script-src 'self'");
+    }
   });
+
+  it('titles the document with the project name and version', async () => {
+    const { info } = (await (await call(app, 'GET', '/openapi.json')).json()) as {
+      info: { title: string; version: string };
+    };
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+    expect(info).toEqual({ title: 'api-hono-starter', version });
+  });
+
+  it.each(['/docs', '/docs/init.js', '/openapi.json'])(
+    'returns 404 for %s when docs are off, as they are by default',
+    async (path) => {
+      const response = await call(testApp({ DOCS_ENABLED: 'false' }), 'GET', path);
+      await expectProblem(response, 404, 'not-found');
+    },
+  );
 });

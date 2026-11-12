@@ -1,5 +1,4 @@
 import { httpInstrumentationMiddleware } from '@hono/otel';
-import { swaggerUI } from '@hono/swagger-ui';
 import { bodyLimit } from 'hono/body-limit';
 import type { ApplyGlobalResponse } from 'hono/client';
 import { cors } from 'hono/cors';
@@ -11,10 +10,12 @@ import { createRequireAuth } from './features/auth/middleware.ts';
 import { createAuthRouter } from './features/auth/routes.ts';
 import { createHealthRouter } from './features/health/routes.ts';
 import { createNotesRouter } from './features/notes/routes.ts';
+import { mountApiDocs } from './platform/api-docs.ts';
 import { crossOriginProtection } from './platform/cross-origin.ts';
 import { createErrorHandler, respond } from './platform/error-handler.ts';
 import type { Logger } from './platform/logger.ts';
 import { ProblemError, type ProblemResponses } from './platform/problem.ts';
+import { project } from './platform/project.ts';
 import { loginFailureLimit, rateLimit } from './platform/rate-limit.ts';
 import { createRouter } from './platform/router.ts';
 import type { Readiness } from './platform/shutdown.ts';
@@ -132,11 +133,13 @@ export function createApp({
     in: 'cookie',
     name: '__Host-session',
   });
-  app.doc31('/openapi.json', {
-    openapi: '3.1.0',
-    info: { title: 'API Hono starter', version: '1.0.0' },
-  });
-  app.get('/docs', swaggerUI({ url: '/openapi.json' }));
+  if (config.DOCS_ENABLED) {
+    app.doc31('/openapi.json', {
+      openapi: '3.1.0',
+      info: { title: project.name, version: project.version },
+    });
+    mountApiDocs(app, project.name);
+  }
 
   app.notFound((c) =>
     respond(c, new ProblemError('not-found', `No route matches ${c.req.method} ${c.req.path}.`)),

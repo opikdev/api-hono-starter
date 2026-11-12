@@ -5,7 +5,7 @@ import { createDb, createPool } from '../src/db/client.ts';
 import { createLogger } from '../src/platform/logger.ts';
 
 const databaseUrl = 'postgres://unused@127.0.0.1/unused';
-const config = loadConfig({ DATABASE_URL: databaseUrl, LOG_LEVEL: 'silent' });
+const config = loadConfig({ DATABASE_URL: databaseUrl, LOG_LEVEL: 'silent', DOCS_ENABLED: 'true' });
 const pool = createPool(databaseUrl, 1000);
 const app = createApp({ config, db: createDb(pool), logger: createLogger('silent') });
 

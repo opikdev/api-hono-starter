@@ -34,6 +34,7 @@ services:
     stop_grace_period: 45s
     environment:
       DATABASE_URL: postgres://api_app:api_app_dev_password@db:5432/api
+      DOCS_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     extra_hosts:
       - host.docker.internal:host-gateway

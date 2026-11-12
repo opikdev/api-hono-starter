@@ -15,6 +15,16 @@ describe('loadConfig', () => {
     expect(config.LOGIN_FAILURE_WINDOW_SECONDS).toBe(900);
     expect(config.SHUTDOWN_DRAIN_SECONDS).toBe(5);
     expect(config.SHUTDOWN_TIMEOUT_SECONDS).toBe(30);
+    expect(config.DOCS_ENABLED).toBe(false);
+  });
+
+  it.each([
+    ['true', true],
+    ['false', false],
+  ])('parses DOCS_ENABLED=%s', (value, expected) => {
+    expect(loadConfig({ DATABASE_URL: databaseUrl, DOCS_ENABLED: value }).DOCS_ENABLED).toBe(
+      expected,
+    );
   });
 
   it('allows a drain of 0 seconds', () => {

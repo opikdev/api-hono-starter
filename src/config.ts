@@ -23,6 +23,7 @@ const envSchema = z
     AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
     LOGIN_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
     LOGIN_FAILURE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    DOCS_ENABLED: z.stringbool().default(false),
     SHUTDOWN_DRAIN_SECONDS: z.coerce.number().int().min(0).default(5),
     SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(30),
   })
