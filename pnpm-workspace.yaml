@@ -1,11 +1,9 @@
 allowBuilds:
-  '@scarf/scarf': false
+  "@scarf/scarf": false
   cpu-features: false
   esbuild: true
   protobufjs: false
   ssh2: false
-minimumReleaseAgeExclude:
-  - glob@14.0.5
 overrides:
-  '@esbuild-kit/core-utils>esbuild': ^0.25.12
-  archiver-utils>glob: ^14.0.5
+  "@esbuild-kit/core-utils>esbuild": ^0.25.12
+  archiver-utils>glob: 14.0.4

@@ -164,7 +164,7 @@ settings:
 
 overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.12
-  archiver-utils>glob: ^14.0.5
+  archiver-utils>glob: 14.0.4
 
 importers:
 
@@ -1630,8 +1630,8 @@ packages:
   get-tsconfig@4.14.3:
     resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
 
-  glob@14.0.5:
-    resolution: {integrity: sha512-nbKW5Sl53DEM5PkmZ5Jwfeyss1ohuqcgOBjOarSjz1fp8W4ss4EOOvKADQRbApD6JmVBX+HkpZYfBez4wXbeQQ==}
+  glob@14.0.4:
+    resolution: {integrity: sha512-mMiwNKoJZ4HAIRVJxotO6LsNRReA30gQwP9E2/p94tfLv+jygCNpKDjhhSL6OLY6LE371EZm5EAf7RpYuUqlsw==}
     engines: {node: 18 || 20 || >=22}
 
   graceful-fs@4.2.11:
@@ -3016,7 +3016,7 @@ snapshots:
 
   archiver-utils@5.0.2:
     dependencies:
-      glob: 14.0.5
+      glob: 14.0.4
       graceful-fs: 4.2.11
       is-stream: 2.0.1
       lazystream: 1.0.1
@@ -3335,7 +3335,7 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  glob@14.0.5:
+  glob@14.0.4:
     dependencies:
       minimatch: 11.0.7
       minipass: 7.1.3
