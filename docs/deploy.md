@@ -40,11 +40,13 @@ The runner holds a Postgres advisory lock for the whole run, so running it in ev
 ## Keep secrets out of images
 
 - Read `DATABASE_URL` and `MIGRATION_DATABASE_URL` from your platform's secret store, such as Kubernetes Secrets or AWS Secrets Manager. Never bake them into an image or commit them.
-- `docker/postgres/init.sql` creates `api_app` with a dev password. Run it once as the owner role, then set the real password without editing the file. Send it on stdin, so it stays out of shell history and process lists:
+- `docker/postgres/init.sql` creates `api_app` with a dev password. Run it once as the owner role, then set the real password without editing the file. psql reads it from the environment, so it stays out of files, shell history and the process list:
 
   ```sh
-  printf '%s\n' "ALTER ROLE api_app PASSWORD :'password';" \
-    | psql -v password="$API_APP_PASSWORD" "$MIGRATION_DATABASE_URL"
+  psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+  \getenv password API_APP_PASSWORD
+  ALTER ROLE api_app PASSWORD :'password';
+  SQL
   ```
 
 - Set the owner role's password in your provider's console, or the same way. Rotate either by changing the role, then the secret, then restarting.
