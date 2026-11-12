@@ -83,7 +83,7 @@ describe('database errors', () => {
   it.each([
     ['23505', 409, 'conflict'],
     ['23503', 409, 'conflict'],
-    ['23514', 422, 'validation-failed'],
+    ['23514', 400, 'validation-failed'],
   ] as const)('maps Postgres %s to %i %s without leaking it', async (code, status, slug) => {
     const { response, body, logger } = await problemFor(wrapped(code));
     expect(response.status).toBe(status);

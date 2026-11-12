@@ -19,7 +19,7 @@ Each `errors` entry names the invalid input in `field`, as a dot-separated path 
 
 | Type                                 | Status | Meaning                                                           |
 | ------------------------------------ | ------ | ----------------------------------------------------------------- |
-| `urn:problem:validation-failed`      | 400    | A field is invalid, the JSON is malformed, or `limit` is over 100. A value the database's check constraints reject returns it with status 422 |
+| `urn:problem:validation-failed`      | 400    | A field is invalid, the JSON is malformed, `limit` is over 100, or a value breaks a database check constraint |
 | `urn:problem:invalid-credentials`    | 401    | Wrong email or password                                           |
 | `urn:problem:unauthorized`           | 401    | The token or session cookie is missing, invalid, expired, or revoked |
 | `urn:problem:forbidden`              | 403    | A request that changes data came from another site whose origin isn't in `CORS_ORIGINS` |
@@ -38,4 +38,4 @@ Each `errors` entry names the invalid input in `field`, as a dot-separated path 
 
 An `HTTPException` thrown by Hono or its middleware becomes the type with the same status. One with a status not listed here becomes `internal-error`, and it's logged.
 
-A Postgres constraint violation that reaches the error handler becomes a problem without the constraint name or SQL: a unique or foreign key violation is `conflict`, and a check violation is `validation-failed` with status 422. Other database errors are `internal-error`.
+A Postgres constraint violation that reaches the error handler becomes a problem without the constraint name or SQL: a unique or foreign key violation is `conflict`, and a check violation is `validation-failed`. Other database errors are `internal-error`.

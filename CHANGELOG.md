@@ -29,7 +29,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Added
 
 - `pnpm gen:feature` takes a `:unique` field modifier, which adds a per-user unique constraint, documents 409, and generates tests for it.
-- Postgres unique and foreign key violations return 409 `urn:problem:conflict`, and check violations return 422 `validation-failed`, without the constraint name. They were 500s.
+- Postgres unique and foreign key violations return 409 `urn:problem:conflict`, and check violations return 400 `validation-failed`, without the constraint name. They were 500s.
 - Log lines written during a traced request include `trace_id` and `span_id`. Metrics, including request duration and pool connections, export over OTLP with traces. The hourly cleanup is traced.
 - [Go live](docs/deploy.md), a checklist for TLS, Postgres TLS, pool sizing, migrations, secrets, draining, docs, and telemetry.
 - `docs/customize.md` shows how to add a join table and name a migration with `pnpm db:generate --name`.

@@ -346,7 +346,11 @@ describe('OpenAPI', () => {
     const page = await response.text();
     expect(page).toContain('<title>api-hono-starter</title>');
     expect(page).not.toMatch(/https?:\/\//);
-    expect(page).not.toMatch(/<script>|<style>|style="/);
+    const inline = [...page.matchAll(/<(script|style)\b[^>]*>/gi)].filter(
+      ([tag, name]) => name?.toLowerCase() === 'style' || !/\ssrc=/i.test(tag),
+    );
+    expect(inline).toEqual([]);
+    expect(page).not.toMatch(/\sstyle\s*=/i);
     for (const src of page.matchAll(/(?:src|href)="([^"]+)"/g)) {
       const asset = await call(app, 'GET', src[1] as string);
       expect(asset.status, src[1]).toBe(200);

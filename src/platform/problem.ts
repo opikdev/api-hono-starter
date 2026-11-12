@@ -68,7 +68,6 @@ export function problemResponseRef(status: ProblemStatus) {
   return { $ref: `#/components/responses/${problemResponseNames[status]}` };
 }
 
-/** Documents the problems a route can return, through the shared response components. */
 export function problemResponses(...slugs: ProblemSlug[]) {
   return Object.fromEntries(
     slugs.map((slug) => [
@@ -82,7 +81,6 @@ interface ProblemOptions {
   errors?: FieldError[];
   headers?: Record<string, string>;
   cause?: unknown;
-  status?: ProblemStatus;
 }
 
 export class ProblemError extends Error {
@@ -95,7 +93,7 @@ export class ProblemError extends Error {
   constructor(slug: ProblemSlug, detail: string, options: ProblemOptions = {}) {
     super(detail, { cause: options.cause });
     this.slug = slug;
-    this.status = options.status ?? problemCatalog[slug].status;
+    this.status = problemCatalog[slug].status;
     this.title = problemCatalog[slug].title;
     this.errors = options.errors;
     this.headers = options.headers ?? {};

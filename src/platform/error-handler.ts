@@ -51,9 +51,6 @@ const constraintProblems: Partial<Record<string, () => ProblemError>> = {
     new ProblemError(
       'validation-failed',
       'A value is outside the allowed range. Fix it and retry.',
-      {
-        status: 422,
-      },
     ),
 };
 
